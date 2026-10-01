@@ -9,6 +9,7 @@ export class ApiError extends Error {
 let accessToken: string | null = null;
 let refreshing: Promise<UserDto | null> | null = null;
 
+export const getAccessToken = () => accessToken;
 export const setAccessToken = (t: string | null) => {
   accessToken = t;
 };

@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 const connect = (token: string | undefined) => {
-  const s = io(`http://localhost:${port}`, { path: '/api/socket.io', transports: ['websocket'], auth: token ? { token } : {}, reconnection: false });
+  const s = io(`http://localhost:${port}`, { path: '/api/socket.io', addTrailingSlash: false, transports: ['websocket'], auth: token ? { token } : {}, reconnection: false });
   sockets.push(s);
   return s;
 };

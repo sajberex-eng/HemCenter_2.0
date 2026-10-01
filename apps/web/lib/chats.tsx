@@ -1,0 +1,213 @@
+'use client';
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ChatDto, MessageDto, ServerEvents, UserDto } from '@hemcenter/shared';
+import { api } from './api';
+import { useAuth } from './auth';
+import { useI18n } from './i18n';
+import { createSocket } from './socket';
+
+export type ChatEvent =
+  | { type: 'message:new' | 'message:updated' | 'message:deleted'; message: MessageDto }
+  | { type: 'chat:read'; chatId: string; userId: string; lastReadSeq: number }
+  | { type: 'chat:updated'; chatId: string }
+  | { type: 'resync' };
+
+interface ChatsState {
+  chats: ChatDto[];
+  loaded: boolean;
+  connected: boolean;
+  totalUnread: number;
+  people: Record<string, UserDto>;
+  nameOf: (id: string) => string;
+  ensurePeople: (ids: string[]) => void;
+  reload: () => Promise<void>;
+  upsertChat: (chat: ChatDto) => void;
+  /** The conversation currently on screen; its incoming messages are not counted as unread. */
+  setActiveChat: (id: string | null) => void;
+  markReadLocal: (chatId: string, seq: number) => void;
+  subscribe: (handler: (e: ChatEvent) => void) => () => void;
+}
+
+const Ctx = createContext<ChatsState | null>(null);
+
+const byRecency = (a: ChatDto, b: ChatDto) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '');
+
+export function ChatsProvider({ children }: { children: ReactNode }) {
+  const { user, refreshUser } = useAuth();
+  const { t } = useI18n();
+  const [chats, setChats] = useState<ChatDto[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [connected, setConnected] = useState(true);
+  const [people, setPeople] = useState<Record<string, UserDto>>({});
+  const activeChat = useRef<string | null>(null);
+  const handlers = useRef(new Set<(e: ChatEvent) => void>());
+  const requested = useRef(new Set<string>());
+  // always the latest list, readable from long-lived socket handlers
+  const chatsSnapshot = useRef<ChatDto[]>([]);
+  chatsSnapshot.current = chats;
+  const meId = user?.id ?? null;
+
+  const emit = useCallback((e: ChatEvent) => handlers.current.forEach((h) => h(e)), []);
+
+  const reload = useCallback(async () => {
+    const list = await api<ChatDto[]>('/chats');
+    setChats(list.sort(byRecency));
+    setLoaded(true);
+  }, []);
+
+  const ensurePeople = useCallback((ids: string[]) => {
+    const missing = ids.filter((id) => !requested.current.has(id));
+    missing.forEach((id) => requested.current.add(id));
+    if (!missing.length) return;
+    // the directory covers active colleagues; people who left or were blocked are fetched one by one
+    Promise.allSettled(missing.map((id) => api<UserDto>(`/users/${id}`))).then((results) => {
+      const found = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+      if (found.length) setPeople((p) => ({ ...p, ...Object.fromEntries(found.map((u) => [u.id, u])) }));
+    });
+  }, []);
+
+  // staff directory
+  useEffect(() => {
+    if (!meId) return;
+    api<UserDto[]>('/users').then((list) => {
+      list.forEach((u) => requested.current.add(u.id));
+      setPeople(Object.fromEntries(list.map((u) => [u.id, u])));
+    }).catch(() => undefined);
+  }, [meId]);
+
+  // authors we do not know yet
+  useEffect(() => {
+    ensurePeople(chats.flatMap((c) => [...c.members.map((m) => m.userId), ...(c.lastMessage ? [c.lastMessage.authorId] : [])]));
+  }, [chats, ensurePeople]);
+
+  // live connection
+  useEffect(() => {
+    if (!meId) {
+      setChats([]);
+      setLoaded(false);
+      return;
+    }
+    const socket = createSocket();
+
+    const bump = (m: MessageDto) =>
+      setChats((prev) => {
+        const chat = prev.find((c) => c.id === m.chatId);
+        if (!chat) return prev;
+        const seenNow = activeChat.current === m.chatId && document.visibilityState === 'visible';
+        const incoming = m.authorId !== meId && !seenNow ? 1 : 0;
+        const next = prev.map((c) =>
+          c.id === m.chatId ? { ...c, lastMessage: m, lastMessageAt: m.createdAt, unreadCount: c.unreadCount + incoming } : c,
+        );
+        return next.sort(byRecency);
+      });
+
+    const on = <E extends keyof ServerEvents>(event: E, fn: (p: ServerEvents[E]) => void) => socket.on(event as string, fn as (...a: unknown[]) => void);
+
+    on('message:new', (m) => {
+      if (chatsHas(m.chatId)) bump(m);
+      else reload().catch(() => undefined);
+      emit({ type: 'message:new', message: m });
+    });
+    on('message:updated', (m) => {
+      setChats((prev) => prev.map((c) => (c.lastMessage?.id === m.id ? { ...c, lastMessage: m } : c)));
+      emit({ type: 'message:updated', message: m });
+    });
+    on('message:deleted', (m) => {
+      setChats((prev) => prev.map((c) => (c.lastMessage?.id === m.id ? { ...c, lastMessage: m } : c)));
+      emit({ type: 'message:deleted', message: m });
+      reload().catch(() => undefined); // unread counters may have changed
+    });
+    on('chat:read', (e) => {
+      setChats((prev) =>
+        prev.map((c) => {
+          if (c.id !== e.chatId) return c;
+          const members = c.members.map((m) => (m.userId === e.userId ? { ...m, lastReadSeq: Math.max(m.lastReadSeq, e.lastReadSeq) } : m));
+          // I read it on another device
+          const unread = e.userId === meId && c.lastMessage && e.lastReadSeq >= c.lastMessage.seq ? 0 : c.unreadCount;
+          return { ...c, members, unreadCount: unread };
+        }),
+      );
+      emit({ type: 'chat:read', ...e });
+    });
+    on('chat:updated', (e) => {
+      reload().catch(() => undefined);
+      emit({ type: 'chat:updated', chatId: e.chatId });
+    });
+
+    const chatsHas = (id: string) => chatsSnapshot.current.some((c) => c.id === id);
+
+    socket.on('connect', () => {
+      setConnected(true);
+      // anything that happened while we were offline is picked up by a full resync
+      api<ChatDto[]>('/chats').then((list) => {
+        setChats(list.sort(byRecency));
+        setLoaded(true);
+        emit({ type: 'resync' });
+      }).catch(() => undefined);
+    });
+    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect_error', () => setConnected(false));
+    socket.on('auth:error', () => {
+      // the session is gone (blocked, signed out elsewhere): this either recovers or sends us to the login screen
+      refreshUser().catch(() => window.location.assign('/login'));
+    });
+    socket.connect();
+    return () => {
+      socket.close();
+    };
+    // reconnect only when the signed-in user changes; the handlers read everything else through refs
+  }, [meId]);
+
+  const totalUnread = useMemo(() => chats.reduce((n, c) => n + c.unreadCount, 0), [chats]);
+
+  // tab title and app icon badge
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) ${t('appName')}` : t('appName');
+    try {
+      const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+      if (totalUnread > 0) nav.setAppBadge?.(totalUnread)?.catch(() => undefined);
+      else nav.clearAppBadge?.()?.catch(() => undefined);
+    } catch {
+      /* badges are optional */
+    }
+  }, [totalUnread, t]);
+
+  const value = useMemo<ChatsState>(
+    () => ({
+      chats,
+      loaded,
+      connected,
+      totalUnread,
+      people,
+      nameOf: (id) => people[id]?.fullName ?? '…',
+      ensurePeople,
+      reload,
+      upsertChat: (chat) => setChats((prev) => [chat, ...prev.filter((c) => c.id !== chat.id)].sort(byRecency)),
+      setActiveChat: (id) => {
+        activeChat.current = id;
+      },
+      markReadLocal: (chatId, seq) =>
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === chatId
+              ? { ...c, unreadCount: 0, members: c.members.map((m) => (m.userId === meId ? { ...m, lastReadSeq: Math.max(m.lastReadSeq, seq) } : m)) }
+              : c,
+          ),
+        ),
+      subscribe: (h) => {
+        handlers.current.add(h);
+        return () => handlers.current.delete(h);
+      },
+    }),
+    [chats, loaded, connected, totalUnread, people, ensurePeople, reload, meId],
+  );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useChats(): ChatsState {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useChats must be used inside ChatsProvider');
+  return v;
+}

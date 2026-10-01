@@ -19,3 +19,33 @@ export const nav = (page: Page) => page.locator('nav:visible');
 
 /** The app's own error box; Next also renders an invisible role=alert route announcer. */
 export const errorBox = (page: Page) => page.locator('p[role="alert"]');
+
+import type { APIRequestContext, Browser, BrowserContext, TestInfo } from '@playwright/test';
+
+export interface Person {
+  id: string;
+  login: string;
+  fullName: string;
+}
+
+/** Creates an active employee through the API (the onboarding UI is covered by flow.spec.ts). */
+export async function createEmployee(request: APIRequestContext, label: string, info: TestInfo): Promise<Person> {
+  const stamp = `${info.project.name}${Date.now()}${Math.floor(Math.random() * 1000)}`.toLowerCase();
+  const login = `${label}.${stamp}`;
+  const fullName = `${label[0].toUpperCase()}${label.slice(1)} Тест${stamp}`;
+  const adminToken = (await (await request.post('/api/auth/login', { data: { login: ADMIN.login, password: ADMIN.password } })).json()).accessToken;
+  const created = await request.post('/api/users', { headers: { Authorization: `Bearer ${adminToken}` }, data: { login, fullName, roles: ['EMPLOYEE'] } });
+  if (created.status() !== 201) throw new Error(`could not create ${login}: ${created.status()}`);
+  const { inviteToken, user } = await created.json();
+  const accepted = await request.post('/api/auth/accept-invite', { data: { token: inviteToken, password: EMPLOYEE_PASSWORD, consent: true } });
+  if (accepted.status() !== 200) throw new Error(`could not activate ${login}`);
+  return { id: user.id, login, fullName };
+}
+
+/** A separate browser context (own cookies) signed in as the given person. */
+export async function openAs(browser: Browser, person: Person, info: TestInfo): Promise<{ ctx: BrowserContext; page: import('@playwright/test').Page }> {
+  const ctx = await browser.newContext({ ...info.project.use });
+  const page = await ctx.newPage();
+  await signIn(page, person.login, EMPLOYEE_PASSWORD);
+  return { ctx, page };
+}

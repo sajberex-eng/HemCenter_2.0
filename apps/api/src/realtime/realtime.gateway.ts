@@ -18,7 +18,8 @@ const room = (userId: string) => `user:${userId}`;
  * Live connection per signed-in device. Every user has a private room; the services emit to rooms and
  * never talk to sockets directly (see RealtimeService).
  */
-@WebSocketGateway({ path: '/api/socket.io', cors: process.env.WEB_ORIGIN ? { origin: process.env.WEB_ORIGIN.split(','), credentials: true } : false })
+// No trailing slash on the path: Next.js (dev) redirects "/x/" to "/x", which breaks polling. Caddy is indifferent.
+@WebSocketGateway({ path: '/api/socket.io', addTrailingSlash: false, cors: process.env.WEB_ORIGIN ? { origin: process.env.WEB_ORIGIN.split(','), credentials: true } : false })
 export class RealtimeGateway implements OnGatewayConnection, OnModuleInit {
   private readonly log = new Logger(RealtimeGateway.name);
   @WebSocketServer() private server: Server;
