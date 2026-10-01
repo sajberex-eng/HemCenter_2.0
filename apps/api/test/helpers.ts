@@ -14,12 +14,14 @@ export async function createApp(): Promise<INestApplication> {
   const app = mod.createNestApplication();
   configureApp(app);
   await app.init();
+  // listen once so supertest does not attach new listeners to the server on every request
+  await app.listen(0);
   return app;
 }
 
 export async function resetDb() {
   // AuditLog is append-only by trigger, so it is cleared with TRUNCATE (not covered by the row trigger).
-  await prisma.$executeRawUnsafe('TRUNCATE "AuditLog", "Invitation", "Session", "User", "Department", "Position" RESTART IDENTITY CASCADE');
+  await prisma.$executeRawUnsafe('TRUNCATE "AuditLog", "Invitation", "Session", "Message", "ChatMember", "Chat", "User", "Department", "Position" RESTART IDENTITY CASCADE');
 }
 
 export async function makeUser(login: string, roles: ('ADMIN' | 'EMPLOYEE' | 'MANAGEMENT' | 'SECRETARY' | 'PROJECT_MANAGER')[] = ['EMPLOYEE']) {

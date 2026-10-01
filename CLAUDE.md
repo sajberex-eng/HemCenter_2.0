@@ -21,7 +21,7 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 
 ## Stack notes
 
-- Monorepo: `apps/web` (Next.js PWA, kk/ru i18n), `apps/api` (NestJS, REST, Prisma), `packages/shared`, `infra/` (Docker Compose, Caddy), `templates/` (DOCX). Still to come: Socket.IO chat, MinIO for files, docxtemplater **core only** (its paid modules are off-limits) for DOCX templates, Gotenberg for PDF.
+- Monorepo: `apps/web` (Next.js PWA, kk/ru i18n), `apps/api` (NestJS, REST, Prisma), `packages/shared`, `infra/` (Docker Compose, Caddy), `templates/` (DOCX). Still to come: Socket.IO chat, file attachments stored on a disk volume (decision: no MinIO; keep storage behind an interface; files are served only through the API after permission checks), docxtemplater **core only** (its paid modules are off-limits) for DOCX templates, Gotenberg for PDF.
 - **Prisma is pinned to 6.x.** The unpinned `prisma` package currently resolves to an 8.x release candidate with a different CLI. **TypeScript is pinned to 5.x** for Nest decorators.
 - **Next.js here is 16**, and `node_modules/next/dist/docs/` is the authoritative documentation (APIs differ from older versions; `middleware` is now `proxy`).
 - Auth: short-lived access JWT (Bearer, kept in memory in the browser) plus a rotating httpOnly refresh cookie with reuse detection. Roles and `isActive` are re-read from the database on every request; `tokenVersion` invalidates access tokens when roles change, a user is blocked or logs out everywhere.
