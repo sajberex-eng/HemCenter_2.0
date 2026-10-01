@@ -3,7 +3,8 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { User } from '@prisma/client';
 import { AuthService, Tokens, toUserDto } from './auth.service';
-import { AcceptInviteDto, ChangePasswordDto, LoginDto } from './dto';
+import { AcceptInviteDto, ChangePasswordDto, DisableTotpDto, LoginDto, LoginTotpDto, TotpCodeDto } from './dto';
+import { TotpService } from './totp.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 const COOKIE = 'hc_refresh';
@@ -22,15 +23,48 @@ function setRefreshCookie(res: Response, t: Tokens) {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: AuthService, private readonly totp: TotpService) {}
 
   @Post('login')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { user, tokens } = await this.auth.login(dto.login, dto.password, meta(req));
+    const r = await this.auth.login(dto.login, dto.password, meta(req));
+    if (r.mfaRequired) return { mfaRequired: true, mfaToken: r.mfaToken };
+    setRefreshCookie(res, r.tokens);
+    return { accessToken: r.tokens.accessToken, user: toUserDto(r.user) };
+  }
+
+  @Post('login/totp')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async loginTotp(@Body() dto: LoginTotpDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { user, tokens } = await this.auth.loginTotp(dto.mfaToken, dto.code, meta(req));
     setRefreshCookie(res, tokens);
     return { accessToken: tokens.accessToken, user: toUserDto(user) };
+  }
+
+  @Post('totp/setup')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  totpSetup(@Req() req: Request) {
+    return this.totp.setup(req.user as User);
+  }
+
+  @Post('totp/enable')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  totpEnable(@Body() dto: TotpCodeDto, @Req() req: Request) {
+    return this.totp.enable(req.user as User, dto.code, req.ip);
+  }
+
+  @Post('totp/disable')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async totpDisable(@Body() dto: DisableTotpDto, @Req() req: Request) {
+    await this.totp.disable(req.user as User, dto.password, req.ip);
   }
 
   @Post('refresh')

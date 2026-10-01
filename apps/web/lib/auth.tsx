@@ -3,13 +3,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { UserDto } from '@hemcenter/shared';
-import { api, authRequest, refreshSession, setAccessToken } from './api';
+import { api, authRequest, loginRequest, refreshSession, setAccessToken } from './api';
 import { useI18n } from './i18n';
 
 interface AuthState {
   user: UserDto | null;
   ready: boolean;
-  login: (login: string, password: string) => Promise<void>;
+  /** Resolves with an mfaToken when a second factor is needed, otherwise signs in. */
+  login: (login: string, password: string) => Promise<{ mfaToken: string } | null>;
+  loginTotp: (mfaToken: string, code: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
   acceptInvite: (token: string, password: string, consent: boolean) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
@@ -43,7 +46,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       isAdmin: !!user?.roles.includes('ADMIN'),
-      login: async (login, password) => adopt(await authRequest('/auth/login', { login, password })),
+      login: async (login, password) => {
+        const r = await loginRequest(login, password);
+        if ('mfaToken' in r) return { mfaToken: r.mfaToken };
+        adopt(r.user);
+        return null;
+      },
+      loginTotp: async (mfaToken, code) => adopt(await authRequest('/auth/login/totp', { mfaToken, code })),
+      refreshUser: async () => adopt(await api<UserDto>('/auth/me')),
       acceptInvite: async (token, password, consent) => adopt(await authRequest('/auth/accept-invite', { token, password, consent })),
       logout: async () => {
         try {

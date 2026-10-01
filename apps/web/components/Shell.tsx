@@ -36,7 +36,7 @@ export function Shell({ children }: { children: ReactNode }) {
     // The API enforces roles; this just keeps non-admins out of empty admin screens.
     else if (ready && user && adminOnly && !isAdmin) router.replace('/');
     // A seeded or reset account must pick its own password before anything else.
-    else if (ready && user?.mustChangePassword && pathname !== '/profile') router.replace('/profile');
+    else if (ready && (user?.mustChangePassword || user?.mfaSetupRequired) && pathname !== '/profile') router.replace('/profile');
   }, [ready, user, adminOnly, isAdmin, pathname, router]);
 
   if (!ready || !user || (adminOnly && !isAdmin)) return <p className="p-6 text-slate-500">{t('loading')}</p>;

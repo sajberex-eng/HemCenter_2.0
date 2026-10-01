@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthService, toUserDto } from '../auth/auth.service';
+import { TotpService } from '../auth/totp.service';
 import { hashPassword, randomToken, sha256 } from '../common/password';
 import { CreateUserDto, UpdateUserDto } from './dto';
 
@@ -14,6 +15,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly auth: AuthService,
+    private readonly totp: TotpService,
   ) {}
 
   async list(params: { q?: string; departmentId?: string; includeInactive?: boolean }) {
@@ -98,5 +100,13 @@ export class UsersService {
     const inviteToken = await this.createInvitation(id);
     await this.audit.log({ actorId, action: 'user.access_reset', entityType: 'User', entityId: id, ip });
     return { inviteToken, inviteDays: INVITE_DAYS };
+  }
+
+  /** For an employee who lost the authenticator device: they sign in with the password and enrol again. */
+  async resetTotp(id: string, actorId: string, ip?: string) {
+    if (!(await this.prisma.user.findUnique({ where: { id } }))) throw new NotFoundException('USER_NOT_FOUND');
+    await this.totp.clear(id);
+    await this.auth.revokeAll(id);
+    await this.audit.log({ actorId, action: 'user.totp_reset', entityType: 'User', entityId: id, ip });
   }
 }

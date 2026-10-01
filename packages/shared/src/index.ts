@@ -19,6 +19,11 @@ export interface UserDto {
   locale: Locale;
   isActive: boolean;
   mustChangePassword: boolean;
+  totpEnabled: boolean;
+  /** True for an administrator who must enable two-factor authentication before using admin features. */
+  mfaSetupRequired: boolean;
   departmentId: string | null;
   positionId: string | null;
 }
+
+export const TOTP_RECOVERY_CODES = 10;

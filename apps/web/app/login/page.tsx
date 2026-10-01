@@ -8,12 +8,14 @@ import { Button, Card, ErrorText, Field, Input, LocaleSwitcher, useErrorText } f
 
 export default function LoginPage() {
   const { t } = useI18n();
-  const { user, ready, login } = useAuth();
+  const { user, ready, login, loginTotp } = useAuth();
   const router = useRouter();
   const errorText = useErrorText();
   const [form, setForm] = useState({ login: '', password: '' });
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [mfaToken, setMfaToken] = useState<string>();
+  const [code, setCode] = useState('');
 
   useEffect(() => {
     if (ready && user) router.replace('/');
@@ -24,7 +26,26 @@ export default function LoginPage() {
     setBusy(true);
     setError(undefined);
     try {
-      await login(form.login, form.password);
+      const next = await login(form.login, form.password);
+      if (next) {
+        setMfaToken(next.mfaToken);
+        setBusy(false);
+        return;
+      }
+      router.replace('/');
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  }
+
+  async function submitCode(e: FormEvent) {
+    e.preventDefault();
+    if (!mfaToken) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await loginTotp(mfaToken, code);
       router.replace('/');
     } catch (err) {
       setError(errorText(err));
@@ -42,19 +63,36 @@ export default function LoginPage() {
         <LocaleSwitcher />
       </div>
       <Card>
-        <form onSubmit={submit} className="space-y-4">
-          <h2 className="text-lg font-medium">{t('login.title')}</h2>
-          <Field label={t('login.login')}>
-            <Input autoComplete="username" autoCapitalize="none" autoCorrect="off" required value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} />
-          </Field>
-          <Field label={t('login.password')}>
-            <Input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          </Field>
-          <ErrorText>{error}</ErrorText>
-          <Button type="submit" disabled={busy} className="w-full">
-            {t('login.submit')}
-          </Button>
-        </form>
+        {mfaToken ? (
+          <form onSubmit={submitCode} className="space-y-4">
+            <h2 className="text-lg font-medium">{t('mfa.title')}</h2>
+            <p className="text-sm text-slate-600">{t('mfa.intro')}</p>
+            <Field label={t('mfa.code')}>
+              <Input autoFocus autoComplete="one-time-code" inputMode="text" autoCapitalize="none" autoCorrect="off" required value={code} onChange={(e) => setCode(e.target.value)} />
+            </Field>
+            <ErrorText>{error}</ErrorText>
+            <Button type="submit" disabled={busy} className="w-full">
+              {t('mfa.submit')}
+            </Button>
+            <Button type="button" variant="secondary" className="w-full" onClick={() => { setMfaToken(undefined); setCode(''); setError(undefined); setForm({ ...form, password: '' }); }}>
+              {t('mfa.back')}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={submit} className="space-y-4">
+            <h2 className="text-lg font-medium">{t('login.title')}</h2>
+            <Field label={t('login.login')}>
+              <Input autoComplete="username" autoCapitalize="none" autoCorrect="off" required value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} />
+            </Field>
+            <Field label={t('login.password')}>
+              <Input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </Field>
+            <ErrorText>{error}</ErrorText>
+            <Button type="submit" disabled={busy} className="w-full">
+              {t('login.submit')}
+            </Button>
+          </form>
+        )}
       </Card>
       <p className="text-center text-xs text-slate-500">{t('login.noAccount')}</p>
     </main>

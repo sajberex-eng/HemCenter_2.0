@@ -15,3 +15,16 @@ export class AcceptInviteDto {
   @IsString() @MaxLength(200) password: string;
   @IsBoolean() consent: boolean;
 }
+
+export class LoginTotpDto {
+  @IsString() @MinLength(20) @MaxLength(2000) mfaToken: string;
+  @IsString() @MinLength(6) @MaxLength(30) code: string;
+}
+
+export class TotpCodeDto {
+  @IsString() @MinLength(6) @MaxLength(10) code: string;
+}
+
+export class DisableTotpDto {
+  @IsString() @MaxLength(200) password: string;
+}

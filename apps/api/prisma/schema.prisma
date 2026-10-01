@@ -60,6 +60,11 @@ model User {
   lockedUntil      DateTime?
   tokenVersion     Int         @default(0)
   consentAt        DateTime?
+  // Two-factor authentication (TOTP). The secret is stored encrypted (AES-256-GCM).
+  totpSecretEnc    String?
+  totpEnabled      Boolean     @default(false)
+  totpLastStep     Int?
+  totpRecoveryHashes String[]
   lastLoginAt      DateTime?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt

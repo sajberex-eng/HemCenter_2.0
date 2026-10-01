@@ -79,3 +79,13 @@ export async function authRequest(path: string, body: unknown): Promise<UserDto>
   accessToken = res.accessToken;
   return res.user;
 }
+
+export type LoginResult = { user: UserDto } | { mfaToken: string };
+
+/** Password step. Resolves with the user, or with an mfaToken when a second factor is required. */
+export async function loginRequest(login: string, password: string): Promise<LoginResult> {
+  const res = await api<AuthResult | { mfaRequired: true; mfaToken: string }>('/auth/login', { method: 'POST', body: { login, password } });
+  if ('mfaRequired' in res) return { mfaToken: res.mfaToken };
+  accessToken = res.accessToken;
+  return { user: res.user };
+}

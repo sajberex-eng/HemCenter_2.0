@@ -73,6 +73,17 @@ export default function UsersPage() {
     }
   }
 
+  async function resetTotp(u: UserDto) {
+    if (!confirm(t('users.confirmResetTotp'))) return;
+    setError(undefined);
+    try {
+      await api(`/users/${u.id}/reset-totp`, { method: 'POST' });
+      load();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
   async function resetAccess(u: UserDto) {
     if (!confirm(t('users.confirmReset'))) return;
     setError(undefined);
@@ -190,6 +201,7 @@ export default function UsersPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => resetAccess(u)}>{t('users.resetAccess')}</Button>
+                {u.totpEnabled && <Button variant="secondary" onClick={() => resetTotp(u)}>{t('users.resetTotp')}</Button>}
                 {u.id !== me?.id && (
                   <Button variant={u.isActive ? 'danger' : 'secondary'} onClick={() => patch(u, { isActive: !u.isActive })}>
                     {u.isActive ? t('users.deactivate') : t('users.activate')}

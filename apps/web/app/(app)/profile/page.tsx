@@ -6,6 +6,7 @@ import { api, setAccessToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import type { Key } from '@/lib/dictionaries';
+import { SecuritySection } from '@/components/SecuritySection';
 import { Button, Card, ErrorText, Field, Input, PageTitle, useErrorText } from '@/components/ui';
 
 export default function ProfilePage() {
@@ -49,6 +50,7 @@ export default function ProfilePage() {
           {user?.roles.map((r) => <span key={r} className="rounded bg-slate-100 px-2 py-0.5 text-xs">{t(`role.${r}` as Key)}</span>)}
         </div>
       </Card>
+      <SecuritySection />
       <Card>
         <form onSubmit={change} className="space-y-3">
           <h2 className="font-medium">{t('profile.changePassword')}</h2>

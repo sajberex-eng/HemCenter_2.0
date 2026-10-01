@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import type { User } from '@prisma/client';
 import { UsersService } from './users.service';
@@ -39,5 +39,12 @@ export class UsersController {
   @Roles('ADMIN')
   reset(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     return this.users.resetAccess(id, (req.user as User).id, req.ip);
+  }
+
+  @Post(':id/reset-totp')
+  @HttpCode(204)
+  @Roles('ADMIN')
+  async resetTotp(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    await this.users.resetTotp(id, (req.user as User).id, req.ip);
   }
 }

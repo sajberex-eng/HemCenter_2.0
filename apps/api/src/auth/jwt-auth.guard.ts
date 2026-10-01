@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma.service';
 
 export interface AccessPayload {
   sub: string;
-  tv: number;
+  tv?: number;
+  purpose?: string;
 }
 
 @Injectable()
@@ -21,6 +22,8 @@ export class JwtAuthGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('UNAUTHORIZED');
     }
+    // A half-finished 2FA login token must never work as an access token.
+    if (payload.purpose || payload.tv === undefined) throw new UnauthorizedException('UNAUTHORIZED');
     // Permissions are re-read from the database on every request (TZ 4.2).
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive || user.tokenVersion !== payload.tv) throw new UnauthorizedException('UNAUTHORIZED');
