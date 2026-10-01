@@ -179,7 +179,12 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
 
     const chatsHas = (id: string) => chatsSnapshot.current.some((c) => c.id === id);
 
+    const markLive = (on: boolean) => {
+      // lets automated tests (and support staff in DevTools) see whether live updates are flowing
+      document.documentElement.dataset.live = on ? '1' : '0';
+    };
     socket.on('connect', () => {
+      markLive(true);
       setConnected(true);
       // anything that happened while we were offline is picked up by a full resync
       api<ChatDto[]>('/chats').then((list) => {
@@ -188,8 +193,14 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         emit({ type: 'resync' });
       }).catch(() => undefined);
     });
-    socket.on('disconnect', () => setConnected(false));
-    socket.on('connect_error', () => setConnected(false));
+    socket.on('disconnect', () => {
+      markLive(false);
+      setConnected(false);
+    });
+    socket.on('connect_error', () => {
+      markLive(false);
+      setConnected(false);
+    });
     socket.on('auth:error', () => {
       // the session is gone (blocked, signed out elsewhere): this either recovers or sends us to the login screen
       refreshUser().catch(() => window.location.assign('/login'));

@@ -63,6 +63,8 @@ export function NotificationsSection() {
       setSaved(true);
     });
 
+  // Controls stay disabled until the saved values have arrived: otherwise the answer would overwrite what was already typed.
+  const loading = settings === null;
   const dndActive = settings?.dndUntil && new Date(settings.dndUntil) > new Date();
   const fmt = (iso: string) => new Intl.DateTimeFormat(locale === 'kk' ? 'kk-KZ' : 'ru-RU', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 
@@ -97,8 +99,8 @@ export function NotificationsSection() {
         <h3 className="text-sm font-medium">{t('notif.dnd')}</h3>
         {dndActive && settings?.dndUntil && <p className="text-sm text-slate-700" data-testid="dnd-until">{t('notif.dndUntil', { time: fmt(settings.dndUntil) })}</p>}
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={busy} onClick={() => patch({ dndUntil: new Date(Date.now() + 3600_000).toISOString() })}>{t('notif.dnd1h')}</Button>
-          <Button variant="secondary" disabled={busy} onClick={() => patch({ dndUntil: tomorrowMorning().toISOString() })}>{t('notif.dndTomorrow')}</Button>
+          <Button variant="secondary" disabled={busy || loading} onClick={() => patch({ dndUntil: new Date(Date.now() + 3600_000).toISOString() })}>{t('notif.dnd1h')}</Button>
+          <Button variant="secondary" disabled={busy || loading} onClick={() => patch({ dndUntil: tomorrowMorning().toISOString() })}>{t('notif.dndTomorrow')}</Button>
           {dndActive && <Button variant="secondary" disabled={busy} onClick={() => patch({ dndUntil: null })}>{t('notif.dndOff')}</Button>}
         </div>
       </section>
@@ -107,10 +109,10 @@ export function NotificationsSection() {
         <h3 className="text-sm font-medium">{t('notif.quiet')}</h3>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t('notif.quietFrom')}>
-            <Input type="time" value={quiet.start} onChange={(e) => setQuiet({ ...quiet, start: e.target.value })} />
+            <Input type="time" disabled={loading} value={quiet.start} onChange={(e) => setQuiet({ ...quiet, start: e.target.value })} />
           </Field>
           <Field label={t('notif.quietTo')}>
-            <Input type="time" value={quiet.end} onChange={(e) => setQuiet({ ...quiet, end: e.target.value })} />
+            <Input type="time" disabled={loading} value={quiet.end} onChange={(e) => setQuiet({ ...quiet, end: e.target.value })} />
           </Field>
         </div>
         <p className="text-xs text-slate-500">{t('notif.quietHint')}</p>

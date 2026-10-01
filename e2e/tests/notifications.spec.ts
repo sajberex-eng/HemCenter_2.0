@@ -4,6 +4,9 @@ import { createEmployee, EMPLOYEE_PASSWORD, nav, openAs, type Person } from './h
 const ORIGIN = 'http://localhost:3000';
 const composer = (page: Page) => page.getByRole('textbox', { name: 'Сообщение' });
 const toast = (page: Page) => page.getByTestId('toast');
+/** Live updates only reach a page once its socket is connected; wait for that before sending anything. */
+const live = (page: Page) => expect(page.locator('html')).toHaveAttribute('data-live', '1');
+const unreadBadge = (page: Page) => nav(page).getByLabel(/^\d+$/);
 
 async function login(request: import('@playwright/test').APIRequestContext, p: Person) {
   const r = await request.post('/api/auth/login', { data: { login: p.login, password: EMPLOYEE_PASSWORD } });
@@ -25,6 +28,7 @@ test.describe('in-app notifications', () => {
     const boris = await createEmployee(request, 'boris', info);
     const b = await openAs(browser, boris, info);
     await b.page.goto('/staff');
+    await live(b.page);
 
     const chat = await directChat(request, anna, boris);
     await say(request, chat.token, chat.id, 'Совещание переносится на 15:00');
@@ -46,15 +50,18 @@ test.describe('in-app notifications', () => {
 
     // Boris is looking at this very chat
     await b.page.goto(`/chats/${chat.id}`);
+    await live(b.page);
     await say(request, chat.token, chat.id, 'виден сразу');
     await expect(b.page.getByTestId('message').filter({ hasText: 'виден сразу' })).toBeVisible();
     await expect(toast(b.page)).toHaveCount(0);
+    await expect(unreadBadge(b.page)).toHaveCount(0); // it was read on arrival; only then leave (a reload would cancel the request)
 
     // he leaves and mutes the chat: nothing pops up, but the unread counter still counts
     await b.page.goto('/staff');
     const bToken = await login(request, boris);
     await request.patch(`/api/chats/${chat.id}/me`, { headers: { Authorization: `Bearer ${bToken}` }, data: { notifyMode: 'NONE' } });
     await b.page.reload();
+    await live(b.page);
     await say(request, chat.token, chat.id, 'тихое сообщение');
     await expect(nav(b.page).getByLabel('1')).toBeVisible();
     await expect(toast(b.page)).toHaveCount(0);
@@ -62,6 +69,7 @@ test.describe('in-app notifications', () => {
     // "mentions only": an ordinary message is silent, a mention is not
     await request.patch(`/api/chats/${chat.id}/me`, { headers: { Authorization: `Bearer ${bToken}` }, data: { notifyMode: 'MENTIONS' } });
     await b.page.reload();
+    await live(b.page);
     await say(request, chat.token, chat.id, 'обычное сообщение');
     await expect(nav(b.page).getByLabel('2')).toBeVisible();
     await expect(toast(b.page)).toHaveCount(0);
@@ -81,6 +89,7 @@ test.describe('in-app notifications', () => {
     await expect(b.page.getByTestId('dnd-until')).toContainText('Не беспокоить до');
 
     await b.page.goto('/staff');
+    await live(b.page);
     await say(request, chat.token, chat.id, 'во время режима');
     await expect(nav(b.page).getByLabel('1')).toBeVisible();
     await expect(toast(b.page)).toHaveCount(0);
@@ -89,6 +98,7 @@ test.describe('in-app notifications', () => {
     await b.page.getByRole('button', { name: 'Выключить режим' }).click();
     await expect(b.page.getByTestId('dnd-until')).toHaveCount(0);
     await b.page.goto('/staff');
+    await live(b.page);
     await say(request, chat.token, chat.id, 'после режима');
     await expect(toast(b.page)).toContainText('после режима');
     await b.ctx.close();
