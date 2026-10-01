@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { href: '/staff', label: 'nav.staff' },
   { href: '/admin/users', label: 'nav.users', admin: true },
   { href: '/admin/org', label: 'nav.org', admin: true },
+  { href: '/admin/import', label: 'nav.import', admin: true },
   { href: '/admin/audit', label: 'nav.audit', admin: true },
   { href: '/profile', label: 'nav.profile' },
 ];

@@ -260,7 +260,8 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
 
   // ---- derived data -------------------------------------------------------------------------------------------
   const title = chat ? chatTitle(chat, meId, nameOf) : '';
-  const isGroup = chat?.type === 'GROUP';
+  const isGroup = chat?.type === 'GROUP' || chat?.type === 'ARCHIVE'; // archives show who wrote each message
+  const readOnly = chat?.type === 'ARCHIVE';
   const others = useMemo(() => chat?.members.filter((m) => m.userId !== meId) ?? [], [chat, meId]);
   const candidates = useMemo(() => others.map((m) => ({ id: m.userId, name: nameOf(m.userId) })), [others, nameOf]);
   const mentionNames = useMemo(() => chat?.members.map((m) => nameOf(m.userId)) ?? [], [chat, nameOf]);
@@ -363,7 +364,12 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
           <Avatar id={isGroup ? id : others[0]?.userId ?? id} name={title || '?'} />
           <span className="min-w-0">
             <span className="block truncate font-medium">{title}</span>
-            {isGroup && chat && <span className="block text-xs text-slate-500">{t('chats.membersCount', { n: chat.members.length })}</span>}
+            {isGroup && chat && (
+              <span className="block text-xs text-slate-500">
+                {readOnly ? `${t('chats.archive')} · ` : ''}
+                {t('chats.membersCount', { n: chat.members.length })}
+              </span>
+            )}
           </span>
         </button>
       </header>
@@ -422,7 +428,8 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
                 authorName={isGroup ? nameOf(m.authorId) : undefined}
                 mentionNames={mentionNames}
                 replyAuthorName={m.replyTo ? nameOf(m.replyTo.authorId) : undefined}
-                readState={readState(m)}
+                readState={readOnly ? undefined : readState(m)}
+                readOnly={readOnly}
                 highlighted={highlightSeq === m.seq}
                 canPin={canPin}
                 pinned={isPinned(m)}
@@ -465,16 +472,22 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
+      {readOnly ? (
+        <p role="note" data-testid="archive-note" className="safe-bottom border-t border-slate-200 bg-slate-100 px-3 py-3 text-center text-sm text-slate-600">
+          {t('chats.archiveReadOnly')}
+        </p>
+      ) : (
       <Composer
-        key={id}
-        chatId={id}
-        candidates={candidates}
-        banner={bannerFor}
-        initialText={editing?.body ?? undefined}
-        editKey={editing?.id}
-        busy={busy}
-        onSend={send}
-      />
+          key={id}
+          chatId={id}
+          candidates={candidates}
+          banner={bannerFor}
+          initialText={editing?.body ?? undefined}
+          editKey={editing?.id}
+          busy={busy}
+          onSend={send}
+        />
+      )}
 
       {infoOpen && chat && <ChatInfo chat={chat} title={title} onClose={() => setInfoOpen(false)} />}
     </section>

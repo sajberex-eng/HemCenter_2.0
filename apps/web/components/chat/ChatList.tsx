@@ -109,7 +109,7 @@ export function ChatList() {
               {visibleChats.map(({ chat: c, title }) => {
                 const last = c.lastMessage;
                 const preview = !last ? t('chats.noMessages') : last.deleted ? t('chats.deletedMessage') : last.body || (last.attachments[0] ? `📎 ${last.attachments[0].name}` : '');
-                const prefix = last && !last.deleted ? (last.authorId === meId ? `${t('chats.you')}: ` : c.type === 'GROUP' ? `${nameOf(last.authorId).split(' ')[0]}: ` : '') : '';
+                const prefix = last && !last.deleted ? (last.authorId === meId ? `${t('chats.you')}: ` : c.type !== 'DIRECT' ? `${nameOf(last.authorId).split(' ')[0]}: ` : '') : '';
                 const other = c.members.find((m) => m.userId !== meId);
                 const active = pathname === `/chats/${c.id}`;
                 return (
@@ -118,7 +118,10 @@ export function ChatList() {
                       <Avatar id={c.type === 'DIRECT' ? other?.userId ?? c.id : c.id} name={title || '?'} size={44} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
-                          <span className="truncate font-medium">{title}</span>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium">{title}</span>
+                            {c.type === 'ARCHIVE' && <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{t('chats.archive')}</span>}
+                          </span>
                           {c.lastMessageAt && <span className="shrink-0 text-xs text-slate-500">{formatListStamp(c.lastMessageAt, locale, t('chats.yesterday'))}</span>}
                         </span>
                         <span className="flex items-center justify-between gap-2">

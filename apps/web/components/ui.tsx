@@ -1,6 +1,6 @@
 'use client';
 
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { ApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { Key } from '@/lib/dictionaries';
@@ -29,8 +29,12 @@ const inputCls = 'block min-h-11 w-full rounded-lg border border-slate-300 bg-wh
 export const Input = (p: InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={`${inputCls} ${p.className ?? ''}`} />;
 export const Select = (p: SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={`${inputCls} ${p.className ?? ''}`} />;
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>{children}</section>;
+export function Card({ children, className = '', ...rest }: HTMLAttributes<HTMLElement>) {
+  return (
+    <section {...rest} className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
+      {children}
+    </section>
+  );
 }
 
 export function PageTitle({ children }: { children: ReactNode }) {

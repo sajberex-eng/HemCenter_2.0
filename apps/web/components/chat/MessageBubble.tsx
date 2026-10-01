@@ -18,6 +18,8 @@ interface Props {
   readState?: ReadState;
   /** Briefly emphasised after jumping to it from a search result or a pin. */
   highlighted?: boolean;
+  /** Archived history: no actions, no read ticks. */
+  readOnly?: boolean;
   canPin?: boolean;
   pinned?: boolean;
   onTogglePin?: () => void;
@@ -26,7 +28,7 @@ interface Props {
   onDelete: () => void;
 }
 
-export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, canPin, pinned, onTogglePin, onReply, onEdit, onDelete }: Props) {
+export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, readOnly, canPin, pinned, onTogglePin, onReply, onEdit, onDelete }: Props) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -95,7 +97,7 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
           {message.editedAt && !message.deleted && <span>{t('chats.edited')}</span>}
           <span>{formatTime(message.createdAt, locale)}</span>
           {receipt()}
-          {!message.deleted && (
+          {!message.deleted && !readOnly && (
             <button
               type="button"
               aria-label={t('chats.actions')}
