@@ -22,7 +22,7 @@ test('employee enrols 2FA, then signs in with an authenticator code and with a r
   await signIn(page, login, EMPLOYEE_PASSWORD);
   await page.goto('/profile');
   await expect(page.getByText('Выключена')).toBeVisible();
-  await page.getByRole('button', { name: 'Включить' }).click();
+  await page.getByRole('button', { name: 'Включить', exact: true }).click();
   await expect(page.getByAltText('QR')).toBeVisible();
   const secret = (await page.locator('code').first().innerText()).trim();
   expect(secret).toMatch(/^[A-Z2-7]{32}$/);

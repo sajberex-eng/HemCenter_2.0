@@ -58,11 +58,27 @@ describe('auth', () => {
     const login = await loginAs(app, 'anna');
     const oldCookie = login.headers['set-cookie'];
     await http().post('/api/auth/refresh').set('Cookie', oldCookie).expect(200); // rotates it
+    const user = await prisma.user.findUnique({ where: { login: 'anna' } });
+
+    // right away it is a lost cookie or a second tab, not theft: still honoured
+    const race = await http().post('/api/auth/refresh').set('Cookie', oldCookie);
+    expect(race.status).toBe(200);
+
+    // later it is a replay of a stolen token: every session is burned
+    await prisma.session.updateMany({ where: { userId: user!.id, revokedAt: { not: null } }, data: { revokedAt: new Date(Date.now() - 60_000) } });
     const replay = await http().post('/api/auth/refresh').set('Cookie', oldCookie);
     expect(replay.status).toBe(401);
+    expect(replay.body.message).toBe('UNAUTHORIZED');
+    expect(await prisma.session.count({ where: { userId: user!.id, revokedAt: null } })).toBe(0);
+  });
+
+  it('answers simultaneous refreshes with the same cookie (two tabs, a reload) without logging anyone out', async () => {
+    await makeUser('anna');
+    const cookie = (await loginAs(app, 'anna')).headers['set-cookie'];
+    const results = await Promise.all([0, 1, 2].map(() => http().post('/api/auth/refresh').set('Cookie', cookie)));
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
     const user = await prisma.user.findUnique({ where: { login: 'anna' } });
-    const active = await prisma.session.count({ where: { userId: user!.id, revokedAt: null } });
-    expect(active).toBe(0);
+    expect(await prisma.session.count({ where: { userId: user!.id, revokedAt: null } })).toBe(3);
   });
 
   it('invalidates access tokens after logout-all', async () => {

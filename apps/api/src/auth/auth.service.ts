@@ -9,6 +9,7 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { checkPasswordPolicy, hashPassword, randomToken, sha256, verifyPassword } from '../common/password';
 
 const REFRESH_DAYS = 14;
+export const REFRESH_GRACE_MS = 10_000;
 // Verifying against a real dummy hash keeps response time the same for unknown logins.
 const DUMMY_HASH = hashPassword('dummy-password-for-timing');
 
@@ -116,19 +117,24 @@ export class AuthService {
     return this.completeLogin(user, meta);
   }
 
-  /** Rotating refresh token: the presented token is revoked and a new one is issued. */
+  /**
+   * Rotating refresh token: the presented token is revoked and a new one is issued.
+   * A browser can lose the new cookie (a reload cancels the response while the server has already rotated)
+   * or two tabs can present the same cookie at once. A token rotated less than REFRESH_GRACE_MS ago is therefore
+   * still honoured; a replay after that suggests theft and burns every session of the user.
+   */
   async refresh(token: string | undefined, meta: { ip?: string; userAgent?: string }) {
     if (!token) throw new UnauthorizedException('UNAUTHORIZED');
     const session = await this.prisma.session.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
-    if (!session || session.revokedAt || session.expiresAt < new Date() || !session.user.isActive) {
-      if (session && session.revokedAt) {
-        // Reuse of a rotated token suggests theft: drop every session of this user.
+    const inGrace = !!session?.revokedAt && Date.now() - session.revokedAt.getTime() < REFRESH_GRACE_MS;
+    if (!session || (session.revokedAt && !inGrace) || session.expiresAt < new Date() || !session.user.isActive) {
+      if (session && session.revokedAt && !inGrace) {
         await this.revokeAll(session.userId);
         await this.audit.log({ actorId: session.userId, action: 'auth.refresh_reuse_detected', ip: meta.ip });
       }
       throw new UnauthorizedException('UNAUTHORIZED');
     }
-    await this.prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+    if (!session.revokedAt) await this.prisma.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: new Date() } });
     return { user: session.user, tokens: await this.issueTokens(session.user, meta) };
   }
 

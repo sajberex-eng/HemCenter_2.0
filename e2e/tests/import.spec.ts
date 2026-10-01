@@ -29,10 +29,11 @@ test.describe('import from WhatsApp', () => {
     await expect(page.getByLabel('Название архива')).toHaveValue('Бухгалтерия');
 
     // the two colleagues were recognised by name; the guest stays outside
-    const rowOf = (name: string) => page.getByTestId('author-row').filter({ hasText: name });
-    await expect(rowOf(anna.fullName).getByRole('combobox')).toHaveValue(/[0-9a-f-]{36}/);
-    await expect(rowOf(boris.fullName).getByRole('combobox')).toHaveValue(/[0-9a-f-]{36}/);
-    await expect(rowOf('Гость Из Города').getByRole('combobox')).toHaveValue('');
+    // the select lists every employee, so rows cannot be told apart by text: use the accessible name
+    const rowOf = (name: string) => page.getByLabel(name, { exact: true });
+    await expect(rowOf(anna.fullName)).toHaveValue(/[0-9a-f-]{36}/);
+    await expect(rowOf(boris.fullName)).toHaveValue(/[0-9a-f-]{36}/);
+    await expect(rowOf('Гость Из Города')).toHaveValue('');
     await expect(page.getByTestId('import-members')).toHaveText('Увидят архив: 2');
 
     page.once('dialog', (d) => {

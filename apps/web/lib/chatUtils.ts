@@ -1,7 +1,7 @@
 import type { ChatDto, Locale } from '@hemcenter/shared';
 
 export function chatTitle(chat: ChatDto, meId: string, nameOf: (id: string) => string): string {
-  if (chat.type === 'GROUP') return chat.title ?? '';
+  if (chat.type !== 'DIRECT') return chat.title ?? '';
   const other = chat.members.find((m) => m.userId !== meId);
   return other ? nameOf(other.userId) : '';
 }

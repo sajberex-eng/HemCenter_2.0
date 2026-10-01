@@ -59,6 +59,8 @@ describe('helpers', () => {
     const group = { type: 'GROUP', title: 'Бухгалтерия', members: [] } as unknown as ChatDto;
     expect(chatTitle(direct, 'me', (id) => names[id])).toBe('Борис');
     expect(chatTitle(group, 'me', (id) => names[id])).toBe('Бухгалтерия');
+    const archive = { type: 'ARCHIVE', title: 'Бухгалтерия', members: [{ userId: 'me' }, { userId: 'bo' }] } as ChatDto;
+    expect(chatTitle(archive, 'me', (id) => names[id])).toBe('Бухгалтерия');
   });
 
   it('groups messages by local calendar day', () => {
