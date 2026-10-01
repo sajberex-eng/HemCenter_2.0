@@ -5,6 +5,7 @@ import { LOCKOUT_MINUTES, MAX_FAILED_LOGINS, UserDto } from '@hemcenter/shared';
 import { PrismaService } from '../prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService, mfaSetupRequired } from './totp.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { checkPasswordPolicy, hashPassword, randomToken, sha256, verifyPassword } from '../common/password';
 
 const REFRESH_DAYS = 14;
@@ -40,6 +41,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly audit: AuditService,
     private readonly totp: TotpService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private async issueTokens(user: User, meta: { ip?: string; userAgent?: string }): Promise<Tokens> {
@@ -141,6 +143,7 @@ export class AuthService {
       this.prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } }),
       this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
     ]);
+    this.realtime.disconnectUser(userId);
   }
 
   async changePassword(user: User, current: string, next: string, ip?: string) {

@@ -1,4 +1,4 @@
-import { Global, Injectable, Module } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { ServerEvents } from '@hemcenter/shared';
 
 type Emitter = <E extends keyof ServerEvents>(userIds: string[], event: E, payload: ServerEvents[E]) => void;
@@ -26,7 +26,3 @@ export class RealtimeService {
     this.disconnecter?.(userId);
   }
 }
-
-@Global()
-@Module({ providers: [RealtimeService], exports: [RealtimeService] })
-export class RealtimeModule {}

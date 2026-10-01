@@ -7,7 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { OrgModule } from './org/org.module';
 import { ChatsModule } from './chats/chats.module';
-import { RealtimeModule } from './realtime/realtime.service';
+import { RealtimeModule } from './realtime/realtime.module';
 import { HealthController } from './health.controller';
 
 @Global()
