@@ -9,7 +9,9 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: process.env.BASE_URL ?? 'http://localhost:3000',
-    launchOptions: { executablePath, args: ['--no-sandbox', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run'] },
+    // Without a UTF-8 locale (typical in containers) Chromium on Linux cannot represent non-Latin download names
+    // and saves them as "download"; real users' systems have a locale, so tests pin one.
+    launchOptions: { env: { ...process.env, LC_ALL: 'C.UTF-8', LANG: 'C.UTF-8' } as Record<string, string>, executablePath, args: ['--no-sandbox', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run'] },
   },
   projects: [
     { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
