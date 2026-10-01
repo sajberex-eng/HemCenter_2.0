@@ -65,7 +65,8 @@ test.describe('onboarding an employee', () => {
     await emp.getByRole('button', { name: 'Активировать' }).click();
     await expect(errorBox(emp)).toContainText('недействительна');
 
-    // activation signs the employee in; sign out and back in to prove the new password works
+    // activation signed the employee in (the invite page has no menu); sign out and back in to prove the new password works
+    await emp.goto('/');
     await emp.getByRole('button', { name: 'Выйти' }).click();
     await expect(emp).toHaveURL(/\/login$/);
 
