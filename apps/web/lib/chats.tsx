@@ -55,6 +55,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const [people, setPeople] = useState<Record<string, UserDto>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const prefs = useRef<NotificationSettings | null>(null);
+  // settled once the do-not-disturb settings have been fetched (alerts must not be decided before that)
+  const prefsReady = useRef<Promise<unknown>>(Promise.resolve());
   const peopleRef = useRef<Record<string, UserDto>>({});
   peopleRef.current = people;
   const activeChat = useRef<string | null>(null);
@@ -85,7 +87,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshPrefs = useCallback(() => {
-    loadSettings().then((p) => (prefs.current = p)).catch(() => undefined);
+    prefsReady.current = loadSettings().then((p) => (prefs.current = p)).catch(() => undefined);
   }, []);
 
   // notification preferences, and make sure this device's push subscription is known to the server
@@ -132,13 +134,20 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
 
     const on = <E extends keyof ServerEvents>(event: E, fn: (p: ServerEvents[E]) => void) => socket.on(event as string, fn as (...a: unknown[]) => void);
 
-    const alertFor = (m: MessageDto) => {
-      const chat = chatsSnapshot.current.find((c) => c.id === m.chatId);
-      const seenNow = activeChat.current === m.chatId && document.visibilityState === 'visible';
-      if (m.authorId === meId || seenNow) return;
-      if (!wantsAlert(chat?.notifyMode ?? 'ALL', m.mentionIds.includes(meId), prefs.current)) return;
+    /**
+     * Pop-up and sound for a message in a chat that is not on screen. Decided only when the chat's own setting
+     * and the person's do-not-disturb settings are known: right after a page load a message can arrive before
+     * either has been fetched, and guessing "notify" would ring for a chat the person muted.
+     */
+    const alertFor = async (m: MessageDto, list: ChatDto[]) => {
+      if (m.authorId === meId) return;
+      const chat = list.find((c) => c.id === m.chatId);
+      if (!chat) return; // unknown chat: stay quiet, the unread counter still shows it
+      await prefsReady.current;
+      if (activeChat.current === m.chatId && document.visibilityState === 'visible') return;
+      if (!wantsAlert(chat.notifyMode, m.mentionIds.includes(meId), prefs.current)) return;
       const author = peopleRef.current[m.authorId]?.fullName ?? '…';
-      const title = chat?.type === 'GROUP' && chat.title ? `${chat.title} · ${author}` : author;
+      const title = chat.type === 'GROUP' && chat.title ? `${chat.title} · ${author}` : author;
       // inside the app the text may be shown: it is our own screen, not a third-party push service
       const body = m.body || (m.attachments[0] ? `📎 ${m.attachments[0].name}` : '');
       setToasts((prev) => [...prev.filter((x) => x.chatId !== m.chatId), { id: m.id, chatId: m.chatId, title, body }].slice(-3));
@@ -146,9 +155,19 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     };
 
     on('message:new', (m) => {
-      if (chatsHas(m.chatId)) bump(m);
-      else reload().catch(() => undefined);
-      alertFor(m);
+      if (chatsHas(m.chatId)) {
+        bump(m);
+        void alertFor(m, chatsSnapshot.current);
+      } else {
+        // the list is not loaded yet (or this is a brand-new chat): fetch it, then decide with the real settings
+        api<ChatDto[]>('/chats')
+          .then((list) => {
+            setChats(list.sort(byRecency));
+            setLoaded(true);
+            return alertFor(m, list);
+          })
+          .catch(() => undefined);
+      }
       emit({ type: 'message:new', message: m });
     });
     on('message:updated', (m) => {
