@@ -30,7 +30,7 @@ export function ChatList() {
         {chats.map((c) => {
           const title = chatTitle(c, meId, nameOf);
           const last = c.lastMessage;
-          const preview = !last ? t('chats.noMessages') : last.deleted ? t('chats.deletedMessage') : last.body ?? '';
+          const preview = !last ? t('chats.noMessages') : last.deleted ? t('chats.deletedMessage') : last.body || (last.attachments[0] ? `📎 ${last.attachments[0].name}` : '');
           const prefix = last && !last.deleted ? (last.authorId === meId ? `${t('chats.you')}: ` : c.type === 'GROUP' ? `${nameOf(last.authorId).split(' ')[0]}: ` : '') : '';
           const other = c.members.find((m) => m.userId !== meId);
           const active = pathname === `/chats/${c.id}`;

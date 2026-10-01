@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { MessageDto } from '@hemcenter/shared';
 import { useI18n } from '@/lib/i18n';
 import { formatTime, tokenize } from '@/lib/chatUtils';
+import { AttachmentView } from './AttachmentView';
 
 export type ReadState = { kind: 'direct'; read: boolean } | { kind: 'group'; read: number; total: number };
 
@@ -50,28 +51,39 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
         {message.replyTo && (
           <div className="mb-1 rounded-lg border-l-4 border-teal-600 bg-black/5 px-2 py-1 text-xs">
             <div className="font-medium text-teal-800">{replyAuthorName}</div>
-            <div className="line-clamp-2 text-slate-600">{message.replyTo.body ?? t('chats.deletedMessage')}</div>
+            <div className="line-clamp-2 text-slate-600">{message.replyTo.body === null ? t('chats.deletedMessage') : message.replyTo.body || t('chats.fileOnly')}</div>
           </div>
         )}
 
         {message.deleted ? (
           <p className="text-sm italic text-slate-500">{t('chats.deletedMessage')}</p>
         ) : (
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">
-            {tokenize(message.body ?? '', mentionNames).map((p, i) =>
-              p.kind === 'link' ? (
-                <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline">
-                  {p.text}
-                </a>
-              ) : p.kind === 'mention' ? (
-                <span key={i} className="rounded bg-teal-200/70 px-0.5 font-medium text-teal-900">
-                  {p.text}
-                </span>
-              ) : (
-                <span key={i}>{p.text}</span>
-              ),
+          <>
+            {message.attachments.length > 0 && (
+              <div className="mb-1 space-y-1">
+                {message.attachments.map((a) => (
+                  <AttachmentView key={a.id} a={a} />
+                ))}
+              </div>
             )}
-          </p>
+            {message.body && (
+              <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">
+                {tokenize(message.body, mentionNames).map((p, i) =>
+                  p.kind === 'link' ? (
+                    <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline">
+                      {p.text}
+                    </a>
+                  ) : p.kind === 'mention' ? (
+                    <span key={i} className="rounded bg-teal-200/70 px-0.5 font-medium text-teal-900">
+                      {p.text}
+                    </span>
+                  ) : (
+                    <span key={i}>{p.text}</span>
+                  ),
+                )}
+              </p>
+            )}
+          </>
         )}
 
         <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-500">

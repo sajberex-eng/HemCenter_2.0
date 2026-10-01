@@ -177,7 +177,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   };
 
   // ---- actions ------------------------------------------------------------------------------------------------
-  async function send(body: string, mentionIds: string[]): Promise<boolean> {
+  async function send(body: string, mentionIds: string[], attachmentIds: string[]): Promise<boolean> {
     setBusy(true);
     setError(undefined);
     try {
@@ -186,7 +186,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         setMessages((prev) => applyChange(prev, updated));
         setEditing(null);
       } else {
-        const created = await api<MessageDto>(`/chats/${id}/messages`, { method: 'POST', body: { body, mentionIds, ...(replyTo ? { replyToId: replyTo.id } : {}) } });
+        const created = await api<MessageDto>(`/chats/${id}/messages`, { method: 'POST', body: { body, mentionIds, ...(attachmentIds.length ? { attachmentIds } : {}), ...(replyTo ? { replyToId: replyTo.id } : {}) } });
         setMessages((prev) => merge(prev, [created]));
         setReplyTo(null);
       }
@@ -305,6 +305,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       )}
 
       <Composer
+        key={id}
+        chatId={id}
         candidates={candidates}
         banner={bannerFor}
         initialText={editing?.body ?? undefined}

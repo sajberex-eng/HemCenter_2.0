@@ -28,6 +28,7 @@ async function parseError(res: Response): Promise<ApiError> {
     /* non-JSON body */
   }
   if (res.status === 429) code = 'TOO_MANY';
+  if (res.status === 413) code = 'FILE_TOO_LARGE';
   return new ApiError(res.status, code);
 }
 
@@ -49,29 +50,40 @@ export function refreshSession(): Promise<UserDto | null> {
   return refreshing;
 }
 
-export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const send = () =>
-    fetch(`/api${path}`, {
-      method: init.method ?? 'GET',
-      credentials: 'same-origin',
-      headers: {
-        ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-    });
-
+/** Sends a request with the access token; on 401 refreshes the session once and retries. */
+async function send(path: string, build: (headers: Record<string, string>) => RequestInit): Promise<Response> {
+  const attempt = () => fetch(`/api${path}`, { credentials: 'same-origin', ...build(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) });
   let res: Response;
   try {
-    res = await send();
+    res = await attempt();
     if (res.status === 401 && !path.startsWith('/auth/')) {
-      if (await refreshSession()) res = await send();
+      if (await refreshSession()) res = await attempt();
     }
   } catch {
     throw new ApiError(0, 'NETWORK');
   }
   if (!res.ok) throw await parseError(res);
+  return res;
+}
+
+export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const res = await send(path, (auth) => ({
+    method: init.method ?? 'GET',
+    headers: { ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...auth },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  }));
   if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+/** Fetches a protected file. Browsers cannot send the Authorization header from <img src> or <a href>, so files are read as blobs. */
+export async function apiBlob(path: string): Promise<Blob> {
+  return (await send(path, (auth) => ({ headers: auth }))).blob();
+}
+
+/** multipart upload; the browser sets the Content-Type with its boundary. */
+export async function apiUpload<T = unknown>(path: string, form: FormData): Promise<T> {
+  const res = await send(path, (auth) => ({ method: 'POST', headers: auth, body: form }));
   return (await res.json()) as T;
 }
 

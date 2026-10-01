@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { createEmployee, nav, openAs } from './helpers';
 
@@ -187,6 +188,97 @@ test.describe('phone layout', () => {
     await a.page.getByRole('link', { name: 'Назад' }).click();
     await expect(a.page).toHaveURL(/\/chats$/);
     await expect(a.page.locator('nav:visible')).toHaveCount(1);
+    await a.ctx.close();
+  });
+});
+
+// 1x1 transparent PNG
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+test.describe('attachments', () => {
+  test('sending a file and an image; the recipient downloads the exact bytes', async ({ browser, request }, info) => {
+    const anna = await createEmployee(request, 'anna', info);
+    const boris = await createEmployee(request, 'boris', info);
+    const a = await openAs(browser, anna, info);
+    const b = await openAs(browser, boris, info);
+    await startDirect(a.page, boris.fullName);
+
+    const content = Buffer.from('Протокол №1\nРешили: утвердить план.\n');
+    await a.page.getByTestId('file-input').setInputFiles([
+      { name: 'Протокол №1.txt', mimeType: 'text/plain', buffer: content },
+      { name: 'scan.png', mimeType: 'image/png', buffer: PNG_1PX },
+    ]);
+    const chips = a.page.getByTestId('pending-file');
+    await expect(chips).toHaveCount(2);
+    await expect(chips.filter({ hasText: 'Загрузка…' })).toHaveCount(0); // both finished uploading
+    await composer(a.page).fill('Во вложении протокол и скан');
+    await sendButton(a.page).click();
+    await expect(chips).toHaveCount(0);
+    await expect(a.page.getByTestId('attachment-file')).toBeVisible();
+
+    // Boris sees both; the image really renders (loaded through an authorised request)
+    await b.page.goto('/chats');
+    await b.page.getByTestId('chat-item').filter({ hasText: anna.fullName }).click();
+    const card = b.page.getByTestId('attachment-file');
+    await expect(card).toContainText('Протокол №1.txt');
+    const img = b.page.getByTestId('attachment-image');
+    await expect(img).toBeVisible();
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+
+    const [download] = await Promise.all([b.page.waitForEvent('download'), card.click()]);
+    expect(download.suggestedFilename()).toBe('Протокол №1.txt');
+    const saved = await readFile((await download.path())!);
+    expect(saved.equals(content)).toBe(true);
+
+    await a.ctx.close();
+    await b.ctx.close();
+  });
+
+  test('a file alone is a message; programs are refused; an unsent file can be taken back', async ({ browser, request }, info) => {
+    const anna = await createEmployee(request, 'anna', info);
+    const boris = await createEmployee(request, 'boris', info);
+    const a = await openAs(browser, anna, info);
+    await startDirect(a.page, boris.fullName);
+
+    // a program is rejected with a clear reason and cannot be sent
+    await a.page.getByTestId('file-input').setInputFiles({ name: 'setup.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('MZ....') });
+    const bad = a.page.getByTestId('pending-file');
+    await expect(bad).toContainText('Этот тип файла нельзя отправлять');
+    await expect(sendButton(a.page)).toBeDisabled();
+    await bad.getByRole('button', { name: /Убрать файл/ }).click();
+    await expect(bad).toHaveCount(0);
+
+    // an uploaded file that is removed before sending never becomes a message
+    await a.page.getByTestId('file-input').setInputFiles({ name: 'draft.txt', mimeType: 'text/plain', buffer: Buffer.from('draft') });
+    await expect(a.page.getByTestId('pending-file')).toContainText('draft.txt');
+    await expect(a.page.getByTestId('pending-file')).not.toContainText('Загрузка…');
+    await a.page.getByTestId('pending-file').getByRole('button', { name: /Убрать файл/ }).click();
+    await expect(sendButton(a.page)).toBeDisabled();
+    await expect(a.page.getByTestId('message')).toHaveCount(0);
+
+    // a file without any text is accepted as a message and shown in the chat list preview
+    await a.page.getByTestId('file-input').setInputFiles({ name: 'Реестр.xlsx', mimeType: 'application/vnd.ms-excel', buffer: Buffer.from('rows') });
+    await expect(a.page.getByTestId('pending-file')).not.toContainText('Загрузка…');
+    await sendButton(a.page).click();
+    await expect(a.page.getByTestId('attachment-file')).toContainText('Реестр.xlsx');
+    if (!isPhone(info.project.name)) await expect(a.page.getByTestId('chat-item').first()).toContainText('📎 Реестр.xlsx');
+    await a.ctx.close();
+  });
+
+  test('a screenshot pasted from the clipboard becomes an attachment', async ({ browser, request }, info) => {
+    const anna = await createEmployee(request, 'anna', info);
+    const boris = await createEmployee(request, 'boris', info);
+    const a = await openAs(browser, anna, info);
+    await startDirect(a.page, boris.fullName);
+
+    await composer(a.page).evaluate((el, b64) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const dt = new DataTransfer();
+      dt.items.add(new File([bytes], 'image.png', { type: 'image/png' }));
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, PNG_1PX.toString('base64'));
+    await expect(a.page.getByTestId('pending-file')).toContainText('image.png');
+    await expect(composer(a.page)).toHaveValue(''); // nothing was pasted as text
     await a.ctx.close();
   });
 });

@@ -199,6 +199,19 @@ const ru = {
   'err.GROUP_NEEDS_MEMBERS': 'Добавьте в группу хотя бы одного участника.',
   'err.GROUP_TOO_LARGE': 'В группе слишком много участников.',
   'err.NOT_A_GROUP': 'Это действие возможно только в группе.',
+  'chats.attach': 'Прикрепить файл',
+  'chats.uploading': 'Загрузка…',
+  'chats.removeFile': 'Убрать файл',
+  'chats.download': 'Скачать',
+  'chats.dropHere': 'Отпустите файлы, чтобы прикрепить',
+  'chats.fileOnly': 'Файл',
+  'err.FILE_TOO_LARGE': 'Файл слишком большой.',
+  'err.FILE_TYPE_NOT_ALLOWED': 'Этот тип файла нельзя отправлять (программы, скрипты и веб-страницы запрещены).',
+  'err.EMPTY_FILE': 'Файл пустой.',
+  'err.FILE_REQUIRED': 'Выберите файл.',
+  'err.ATTACHMENT_INVALID': 'Файл нельзя прикрепить: загрузите его заново.',
+  'err.ATTACHMENT_NOT_FOUND': 'Файл не найден.',
+  'err.TOO_MANY_ATTACHMENTS': 'В одном сообщении можно отправить не больше 10 файлов.',
 } as const;
 
 export type Key = keyof typeof ru;
@@ -402,6 +415,19 @@ const kk: Record<Key, string> = {
   'err.GROUP_NEEDS_MEMBERS': 'Топқа кемінде бір қатысушы қосыңыз.',
   'err.GROUP_TOO_LARGE': 'Топта қатысушылар тым көп.',
   'err.NOT_A_GROUP': 'Бұл әрекет тек топта мүмкін.',
+  'chats.attach': 'Файл тіркеу',
+  'chats.uploading': 'Жүктелуде…',
+  'chats.removeFile': 'Файлды алып тастау',
+  'chats.download': 'Жүктеп алу',
+  'chats.dropHere': 'Тіркеу үшін файлдарды жіберіңіз',
+  'chats.fileOnly': 'Файл',
+  'err.FILE_TOO_LARGE': 'Файл тым үлкен.',
+  'err.FILE_TYPE_NOT_ALLOWED': 'Бұл файл түрін жіберуге болмайды (бағдарламалар, скрипттер және веб-беттер тыйым салынған).',
+  'err.EMPTY_FILE': 'Файл бос.',
+  'err.FILE_REQUIRED': 'Файлды таңдаңыз.',
+  'err.ATTACHMENT_INVALID': 'Файлды тіркеуге болмайды: оны қайта жүктеңіз.',
+  'err.ATTACHMENT_NOT_FOUND': 'Файл табылмады.',
+  'err.TOO_MANY_ATTACHMENTS': 'Бір хабарламада 10 файлдан артық жіберуге болмайды.',
 };
 
 export const dictionaries: Record<Locale, Record<Key, string>> = { ru, kk };
