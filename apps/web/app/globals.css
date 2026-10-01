@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+:root { color-scheme: light; }
+html, body { height: 100%; }
+body { background: #f4f6f8; color: #1b2733; }
+/* iOS safe areas for the installed PWA */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

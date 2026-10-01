@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx src/cli/create-admin.ts"
   },
   "dependencies": {
     "@hemcenter/shared": "workspace:*",

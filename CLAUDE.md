@@ -6,22 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 HemCenter 2.0 is a communication and project-office system for the administrative staff of a private hematology center in **Kazakhstan**. It replaces WhatsApp groups.
 
-The repo currently holds only the specification:
-- `docs/TZ.md` — requirements, the source of truth. Acceptance scenarios are labelled `П-x.x.x`.
-- `docs/research.md` — why we build our own app, the open-source components chosen, and Kazakhstan's legal requirements.
-- `docs/roadmap.md` — delivery stages.
+- `docs/TZ.md` is the source of truth for requirements (acceptance scenarios are labelled `П-x.x.x`); `docs/research.md` explains the decisions; `docs/roadmap.md` lists the stages.
+- **Stage 1 is implemented**: login, roles, invitations, org structure, audit log, kk/ru UI, installable PWA shell. Messenger, projects and documents are not started.
 
-No code exists yet. When stage 1 adds code, add the real build, lint and test commands here.
+## Commands
 
-## Planned stack (TZ §5)
+pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` compiles to `dist/` and must be built before the apps: `pnpm --filter @hemcenter/shared build`.
 
-Monorepo layout: `apps/web` (Next.js PWA, kk/ru i18n), `apps/api` (NestJS, REST + Socket.IO, Prisma), `packages/shared`, `infra/` (Docker Compose, Caddy), `templates/` (DOCX templates).
+- API dev / tests: `pnpm dev:api`; `pnpm --filter @hemcenter/api test` (vitest + supertest on a real PostgreSQL database `hemcenter_test`, migrations applied automatically; one test: `-- -t "name"`).
+- Type check: `pnpm --filter @hemcenter/api lint`, `pnpm --filter @hemcenter/web lint`.
+- DB: `cd apps/api && npx prisma migrate dev` (schema in `prisma/schema.prisma`); first admin: `pnpm db:seed` (`src/cli/create-admin.ts`).
+- Web dev: `pnpm dev:web`. The browser calls `/api/*` on its own origin; Next rewrites it to `API_URL`, so the SameSite=Strict refresh cookie works.
+- Browser tests: `e2e/` (Playwright, outside the workspace). Start the API with `DISABLE_THROTTLE=true`, otherwise the 10 logins/minute limit makes the suite fail with 429.
 
-Supporting services:
-- PostgreSQL;
-- MinIO for file storage;
-- docxtemplater **core only** (its paid modules are off-limits) to fill DOCX templates;
-- Gotenberg to convert DOCX to PDF.
+## Stack notes
+
+- Monorepo: `apps/web` (Next.js PWA, kk/ru i18n), `apps/api` (NestJS, REST, Prisma), `packages/shared`, `infra/` (Docker Compose, Caddy), `templates/` (DOCX). Still to come: Socket.IO chat, MinIO for files, docxtemplater **core only** (its paid modules are off-limits) for DOCX templates, Gotenberg for PDF.
+- **Prisma is pinned to 6.x.** The unpinned `prisma` package currently resolves to an 8.x release candidate with a different CLI. **TypeScript is pinned to 5.x** for Nest decorators.
+- **Next.js here is 16**, and `node_modules/next/dist/docs/` is the authoritative documentation (APIs differ from older versions; `middleware` is now `proxy`).
+- Auth: short-lived access JWT (Bearer, kept in memory in the browser) plus a rotating httpOnly refresh cookie with reuse detection. Roles and `isActive` are re-read from the database on every request; `tokenVersion` invalidates access tokens when roles change, a user is blocked or logs out everywhere.
+- `AuditLog` is append-only, enforced by a PostgreSQL trigger; tests clear it with `TRUNCATE`.
+- The Docker files in `infra/` and `apps/*/Dockerfile` have not been built in the development environment (no Docker daemon there).
 
 ## Core domain idea
 

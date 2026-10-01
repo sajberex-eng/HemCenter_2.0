@@ -1,0 +1,12 @@
+# DOMAIN=hem.example.kz  -> automatic HTTPS certificate.
+# DOMAIN=:80             -> plain HTTP (local test only; never use in production).
+{$DOMAIN::80} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
