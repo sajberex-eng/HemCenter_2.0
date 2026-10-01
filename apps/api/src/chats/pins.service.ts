@@ -25,6 +25,7 @@ export class PinsService {
   /** Direct chats: either person. Groups: only the owner, so the pinned bar does not turn into a free-for-all. */
   private async requireMayPin(chatId: string, userId: string) {
     const { chat, me } = await this.chats.requireMember(chatId, userId);
+    ChatsService.assertWritable(chat);
     if (chat.type === 'GROUP' && me.role !== 'OWNER') throw new ForbiddenException('FORBIDDEN');
     return chat;
   }

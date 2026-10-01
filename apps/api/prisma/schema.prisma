@@ -18,6 +18,8 @@ enum Role {
 enum ChatType {
   DIRECT
   GROUP
+  // Imported history (e.g. from WhatsApp): read-only.
+  ARCHIVE
 }
 
 enum ChatRole {
@@ -82,6 +84,8 @@ model User {
   totpLastStep       Int?
   totpRecoveryHashes String[]
   // Notification preferences (TZ 3.8): manual do-not-disturb and daily quiet hours (local HH:mm).
+  // A name from an imported chat that has no account here: it cannot sign in and is never listed in the directory.
+  isExternal         Boolean            @default(false)
   dndUntil           DateTime?
   quietStart         String?
   quietEnd           String?
@@ -151,6 +155,10 @@ model Chat {
   lastMessageAt DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  // Set for imported history: hash of the source file, so the same export cannot be imported twice.
+  importHash    String?      @unique
+  importedAt    DateTime?
+  importedById  String?
   members       ChatMember[]
   messages      Message[]
   attachments   Attachment[]
@@ -249,4 +257,19 @@ model Pin {
 
   @@id([chatId, messageId])
   @@index([chatId, pinnedAt])
+}
+
+// A WhatsApp export that was uploaded for preview and is waiting to be imported (or discarded after a day).
+model ImportSession {
+  id           String   @id @default(uuid())
+  createdById  String
+  // temporary file under FILES_DIR/imports, removed after the import or when the session expires
+  filePath     String
+  originalName String
+  sha256       String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([createdById])
+  @@index([expiresAt])
 }

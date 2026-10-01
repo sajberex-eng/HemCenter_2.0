@@ -27,6 +27,8 @@ export interface ParsedMessage {
 export interface ParseResult {
   messages: ParsedMessage[];
   order: DateOrder;
+  /** The order was a guess (no date in the file settles it). */
+  orderAmbiguous: boolean;
   /** Lines before the first dated line, or that were neither a message nor a continuation. */
   skippedLines: number;
 }
@@ -74,6 +76,11 @@ export function detectDateOrder(headers: { a: number; b: number }[], hint?: Date
   if (headers.some((x) => x.a > 12 && x.b <= 12)) return 'DMY';
   if (headers.some((x) => x.b > 12 && x.a <= 12)) return 'MDY';
   return hint ?? 'DMY'; // ambiguous (every date has both numbers <= 12): the Kazakh/Russian convention
+}
+
+/** True when some date proves the order (a day above 12). Without that the order is only a guess a human should confirm. */
+export function hasOrderEvidence(headers: { a: number; b: number }[]): boolean {
+  return headers.some((x) => (x.a > 12 && x.b <= 12) || (x.b > 12 && x.a <= 12));
 }
 
 // WhatsApp's placeholders for media that were left out of the export, in the languages we expect.
@@ -131,5 +138,5 @@ export function parseWhatsApp(raw: string, hint?: DateOrder): ParseResult {
     }
     messages.push({ local: { y: h.y, mo, d, h: h.h, mi: h.mi, s: h.s }, author, text, file, omittedMedia });
   }
-  return { messages, order, skippedLines: skipped };
+  return { messages, order, orderAmbiguous: !hasOrderEvidence(drafts.map((d) => d.h)), skippedLines: skipped };
 }

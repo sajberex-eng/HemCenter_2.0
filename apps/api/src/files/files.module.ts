@@ -6,6 +6,6 @@ import { FileStorage, LocalDiskStorage } from './file-storage';
 @Module({
   controllers: [FilesController],
   providers: [FilesService, { provide: FileStorage, useClass: LocalDiskStorage }],
-  exports: [FilesService],
+  exports: [FilesService, FileStorage],
 })
 export class FilesModule {}

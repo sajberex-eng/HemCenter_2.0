@@ -45,6 +45,8 @@ export class FilesService implements OnModuleInit, OnModuleDestroy {
   async upload(chatId: string, userId: string, file: Express.Multer.File | undefined, ip?: string): Promise<AttachmentDto> {
     const member = await this.prisma.chatMember.findUnique({ where: { chatId_userId: { chatId, userId } } });
     if (!member) throw new NotFoundException('CHAT_NOT_FOUND');
+    const chat = await this.prisma.chat.findUniqueOrThrow({ where: { id: chatId }, select: { type: true } });
+    if (chat.type === 'ARCHIVE') throw new BadRequestException('CHAT_READ_ONLY');
     if (!file) throw new BadRequestException('FILE_REQUIRED');
     if (file.size === 0) throw new BadRequestException('EMPTY_FILE');
     if (file.size > maxUploadBytes()) throw new PayloadTooLargeException('FILE_TOO_LARGE');

@@ -59,6 +59,7 @@ export class MessagesService {
 
   async create(chatId: string, userId: string, input: { body?: string; replyToId?: string; mentionIds?: string[]; attachmentIds?: string[] }): Promise<MessageDto> {
     const { chat } = await this.chats.requireMember(chatId, userId);
+    ChatsService.assertWritable(chat);
     const body = (input.body ?? '').trim();
     const attachmentIds = [...new Set(input.attachmentIds ?? [])];
     if (!body && attachmentIds.length === 0) throw new BadRequestException('EMPTY_MESSAGE');
@@ -110,6 +111,7 @@ export class MessagesService {
   async edit(chatId: string, messageId: string, userId: string, input: { body: string; mentionIds?: string[] }, ip?: string) {
     const message = await this.requireAuthored(chatId, messageId, userId);
     const { chat } = await this.chats.requireMember(chatId, userId);
+    ChatsService.assertWritable(chat);
     const body = input.body.trim();
     if (!body) throw new BadRequestException('EMPTY_MESSAGE');
     const mentionIds = await this.validateMentions(chat.members.map((m) => m.userId), input.mentionIds);
@@ -129,6 +131,7 @@ export class MessagesService {
   async remove(chatId: string, messageId: string, userId: string, ip?: string) {
     const message = await this.requireAuthored(chatId, messageId, userId);
     const { chat } = await this.chats.requireMember(chatId, userId);
+    ChatsService.assertWritable(chat);
     const updated = await this.prisma.message.update({
       where: { id: messageId },
       data: { body: null, mentionIds: [], deletedAt: new Date() },

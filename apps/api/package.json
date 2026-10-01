@@ -28,11 +28,13 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "helmet": "^8.3.0",
+    "multer": "^2.4.0",
     "otpauth": "^9.5.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.4",
     "web-push": "^3.6.7",
+    "yauzl": "^3.4.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -45,12 +47,15 @@
     "@types/node": "^26.6.3",
     "@types/supertest": "^7.2.1",
     "@types/web-push": "^3.6.4",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
     "prisma": "6.19.3",
     "socket.io-client": "^4.8.4",
     "supertest": "^7.3.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "yazl": "^3.3.1"
   }
 }

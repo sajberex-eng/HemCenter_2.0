@@ -22,6 +22,7 @@ export class UsersService {
     const q = params.q?.trim();
     const users = await this.prisma.user.findMany({
       where: {
+        isExternal: false, // names from imported chats are not part of the staff directory
         isActive: params.includeInactive ? undefined : true,
         departmentId: params.departmentId,
         OR: q

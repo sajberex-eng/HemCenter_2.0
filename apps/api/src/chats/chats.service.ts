@@ -27,6 +27,11 @@ export class ChatsService {
     return { chat, me };
   }
 
+  /** Imported history cannot be changed: no new messages, edits, deletions, pins or files. */
+  static assertWritable(chat: { type: string }) {
+    if (chat.type === 'ARCHIVE') throw new BadRequestException('CHAT_READ_ONLY');
+  }
+
   private async assertActiveUsers(ids: string[]) {
     const found = await this.prisma.user.count({ where: { id: { in: ids }, isActive: true } });
     if (found !== new Set(ids).size) throw new BadRequestException('USER_NOT_FOUND');

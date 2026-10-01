@@ -8,9 +8,21 @@ export interface Local {
   s: number;
 }
 
+// Building an Intl.DateTimeFormat is expensive (about a third of a millisecond), and an import converts every message
+// twice; one formatter per zone brings 20,000 messages from tens of seconds down to a fraction of a second.
+const formatters = new Map<string, Intl.DateTimeFormat>();
+function formatter(timeZone: string): Intl.DateTimeFormat {
+  let f = formatters.get(timeZone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    formatters.set(timeZone, f);
+  }
+  return f;
+}
+
 /** Offset of `timeZone` from UTC, in milliseconds, at the given instant. */
 function offsetMs(utcMs: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(utcMs));
+  const parts = formatter(timeZone).formatToParts(new Date(utcMs));
   const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
   const asLocalUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
   return asLocalUtc - Math.floor(utcMs / 1000) * 1000;

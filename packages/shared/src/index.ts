@@ -30,7 +30,7 @@ export const TOTP_RECOVERY_CODES = 10;
 
 // ---- Messenger -------------------------------------------------------------
 
-export const CHAT_TYPES = ['DIRECT', 'GROUP'] as const;
+export const CHAT_TYPES = ['DIRECT', 'GROUP', 'ARCHIVE'] as const;
 export type ChatType = (typeof CHAT_TYPES)[number];
 export const NOTIFY_MODES = ['ALL', 'MENTIONS', 'NONE'] as const;
 export type NotifyMode = (typeof NOTIFY_MODES)[number];

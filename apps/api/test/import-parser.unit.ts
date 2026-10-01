@@ -81,6 +81,8 @@ describe('date order detection', () => {
     const ambiguous = parseWhatsApp('03.04.2024, 10:00 - A: x');
     expect(ambiguous.messages[0].local).toMatchObject({ mo: 4, d: 3 }); // 3 April
     expect(parseWhatsApp('03/04/2024, 10:00 - A: x', 'MDY').messages[0].local).toMatchObject({ mo: 3, d: 4 });
+    expect(ambiguous.orderAmbiguous).toBe(true);
+    expect(parseWhatsApp('22.03.2024, 10:00 - A: x').orderAmbiguous).toBe(false);
   });
 });
 
