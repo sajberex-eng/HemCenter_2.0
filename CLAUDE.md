@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 HemCenter 2.0 is a communication and project-office system for the administrative staff of a private hematology center in **Kazakhstan**. It replaces WhatsApp groups.
 
 - `docs/TZ.md` is the source of truth for requirements (acceptance scenarios are labelled `П-x.x.x`); `docs/research.md` explains the decisions; `docs/roadmap.md` lists the stages.
-- **Stage 1 is implemented**: login, roles, invitations, org structure, audit log, kk/ru UI, installable PWA shell. Messenger, projects and documents are not started.
+- **Stage 1 is implemented**: login, roles, invitations, org structure, audit log, TOTP two-factor auth, kk/ru UI, installable PWA shell. Messenger, projects and documents are not started.
 
 ## Commands
 
@@ -17,7 +17,7 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 - Type check: `pnpm --filter @hemcenter/api lint`, `pnpm --filter @hemcenter/web lint`.
 - DB: `cd apps/api && npx prisma migrate dev` (schema in `prisma/schema.prisma`); first admin: `pnpm db:seed` (`src/cli/create-admin.ts`).
 - Web dev: `pnpm dev:web`. The browser calls `/api/*` on its own origin; Next rewrites it to `API_URL`, so the SameSite=Strict refresh cookie works.
-- Browser tests: `e2e/` (Playwright, outside the workspace). Start the API with `DISABLE_THROTTLE=true`, otherwise the 10 logins/minute limit makes the suite fail with 429.
+- Browser tests: `e2e/` (Playwright, outside the workspace). Start the API with `DISABLE_THROTTLE=true REQUIRE_ADMIN_TOTP=false`, otherwise the 10 logins/minute limit makes the suite fail with 429, and admin sign-ins would need single-use TOTP codes.
 
 ## Stack notes
 
@@ -25,6 +25,7 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 - **Prisma is pinned to 6.x.** The unpinned `prisma` package currently resolves to an 8.x release candidate with a different CLI. **TypeScript is pinned to 5.x** for Nest decorators.
 - **Next.js here is 16**, and `node_modules/next/dist/docs/` is the authoritative documentation (APIs differ from older versions; `middleware` is now `proxy`).
 - Auth: short-lived access JWT (Bearer, kept in memory in the browser) plus a rotating httpOnly refresh cookie with reuse detection. Roles and `isActive` are re-read from the database on every request; `tokenVersion` invalidates access tokens when roles change, a user is blocked or logs out everywhere.
+- 2FA (TOTP): mandatory for ADMIN (`REQUIRE_ADMIN_TOTP`, default on; admin endpoints return 403 `MFA_SETUP_REQUIRED` until enrolled). Secrets are AES-256-GCM encrypted (`TOTP_KEY`, falls back to `JWT_SECRET`). A code works once per 30 s step. Wrong codes share the password lockout counter, and the password step must NOT reset it. API tests and e2e servers run with `REQUIRE_ADMIN_TOTP=false` except in `test/totp.e2e.ts`.
 - `AuditLog` is append-only, enforced by a PostgreSQL trigger; tests clear it with `TRUNCATE`.
 - The Docker files in `infra/` and `apps/*/Dockerfile` have not been built in the development environment (no Docker daemon there).
 

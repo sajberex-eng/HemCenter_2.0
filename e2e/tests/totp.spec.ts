@@ -39,7 +39,8 @@ test('employee enrols 2FA, then signs in with an authenticator code and with a r
   await expect(page.getByText('Включена')).toBeVisible();
 
   const logout = async () => {
-    await page.getByRole('button', { name: 'Выйти' }).click();
+    // the profile page has its own sign-out buttons too; the first match is the app shell's
+    await page.getByRole('button', { name: 'Выйти', exact: true }).first().click();
     await expect(page).toHaveURL(/\/login$/);
   };
   const passwordStep = async () => {
