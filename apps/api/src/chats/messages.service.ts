@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ChatsService } from './chats.service';
 import { FilesService } from '../files/files.service';
+import { PushService } from '../push/push.service';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '../files/file-rules';
 import { REPLY_INCLUDE, toMessageDto } from './mappers';
 
@@ -16,6 +17,7 @@ export class MessagesService {
     private readonly realtime: RealtimeService,
     private readonly chats: ChatsService,
     private readonly files: FilesService,
+    private readonly push: PushService,
   ) {}
 
   /** Newest first by number; pass the smallest seq you already have as `before` to load older ones. */
@@ -75,6 +77,8 @@ export class MessagesService {
 
     const dto = toMessageDto(message);
     this.realtime.emit(memberIds, 'message:new', dto);
+    // after the response is ready: push must never slow down or break sending
+    void this.push.notifyNewMessage(dto, chat.members.map((m) => ({ userId: m.userId, notifyMode: m.notifyMode })));
     return dto;
   }
 

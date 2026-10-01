@@ -81,6 +81,11 @@ model User {
   totpEnabled        Boolean      @default(false)
   totpLastStep       Int?
   totpRecoveryHashes String[]
+  // Notification preferences (TZ 3.8): manual do-not-disturb and daily quiet hours (local HH:mm).
+  dndUntil         DateTime?
+  quietStart       String?
+  quietEnd         String?
+  pushSubscriptions PushSubscription[]
   lastLoginAt        DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -210,4 +215,21 @@ model Attachment {
   @@index([messageId])
   @@index([chatId])
   @@index([uploaderId])
+}
+
+// One browser/device that agreed to receive push notifications.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Address of the browser vendor's push service; validated against an allow-list before it is stored or used.
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  failures      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+
+  @@index([userId])
 }

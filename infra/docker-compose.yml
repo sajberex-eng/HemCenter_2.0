@@ -26,8 +26,18 @@ services:
     environment:
       DATABASE_URL: postgresql://hemcenter:${DB_PASSWORD}@db:5432/hemcenter
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ random characters) in infra/.env}
+      TOTP_KEY: ${TOTP_KEY:?set TOTP_KEY in infra/.env}
       NODE_ENV: production
       PORT: 4000
+      FILES_DIR: /data/files
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost.invalid}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Almaty}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+    volumes:
+      # attachments; back this volume up together with the database
+      - files:/data/files
 
   web:
     build:
@@ -54,6 +64,7 @@ services:
       - caddyconfig:/config
 
 volumes:
+  files:
   dbdata:
   caddydata:
   caddyconfig:

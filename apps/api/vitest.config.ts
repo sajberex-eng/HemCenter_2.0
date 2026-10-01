@@ -2,6 +2,10 @@ import swc from 'unplugin-swc';
 import os from 'node:os';
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { generateVAPIDKeys } from 'web-push';
+
+// throwaway keys, regenerated for every test run
+const vapid = generateVAPIDKeys();
 
 export default defineConfig({
   test: {
@@ -12,6 +16,8 @@ export default defineConfig({
     env: {
       DATABASE_URL: 'postgresql://hemcenter:hemcenter@localhost:5432/hemcenter_test',
       JWT_SECRET: 'test-secret-test-secret-test-secret-123',
+      VAPID_PUBLIC_KEY: vapid.publicKey,
+      VAPID_PRIVATE_KEY: vapid.privateKey,
       DISABLE_THROTTLE: 'true',
       FILES_DIR: path.join(os.tmpdir(), 'hemcenter-test-files'),
       // existing admin tests run without 2FA; test/totp.e2e.ts turns the requirement on explicitly
