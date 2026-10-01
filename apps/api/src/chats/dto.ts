@@ -39,3 +39,7 @@ export class EditMessageDto {
 export class MarkReadDto {
   @IsInt() @Min(0) seq: number;
 }
+
+export class PinDto {
+  @IsUUID() messageId: string;
+}

@@ -40,6 +40,11 @@ export const MESSAGE_MAX_LENGTH = 4000;
 export const GROUP_TITLE_MAX_LENGTH = 100;
 export const GROUP_MAX_MEMBERS = 100;
 export const MESSAGES_PAGE_SIZE = 50;
+export const SEARCH_MIN_LENGTH = 2;
+export const SEARCH_PAGE_SIZE = 30;
+export const MAX_PINS_PER_CHAT = 5;
+/** How many messages are loaded on each side of a search hit. */
+export const AROUND_WINDOW = 25;
 
 export interface MessageDto {
   id: string;
@@ -83,6 +88,8 @@ export interface ServerEvents {
   'chat:read': { chatId: string; userId: string; lastReadSeq: number };
   /** Chat created, renamed, or its membership changed: clients reload the chat. */
   'chat:updated': { chatId: string };
+  /** Pinned messages of a chat changed: clients reload the pins. */
+  'chat:pins': { chatId: string };
 }
 
 export interface AttachmentDto {

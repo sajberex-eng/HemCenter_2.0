@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { MESSAGES_PAGE_SIZE, type MessageDto } from '@hemcenter/shared';
+import { AROUND_WINDOW, MESSAGES_PAGE_SIZE, type MessageDto } from '@hemcenter/shared';
 import { PrismaService } from '../prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -20,19 +20,28 @@ export class MessagesService {
     private readonly push: PushService,
   ) {}
 
-  /** Newest first by number; pass the smallest seq you already have as `before` to load older ones. */
-  async list(chatId: string, userId: string, before?: number, limit = MESSAGES_PAGE_SIZE) {
-    await this.chats.requireMember(chatId, userId);
-    const take = Math.min(Math.max(limit, 1), 100);
+  /**
+   * Newest first by number; pass the smallest seq you already have as `before` to load older ones.
+   * With `around` (a search hit) returns a window of messages on both sides of that number instead.
+   */
+  async list(chatId: string, userId: string, opts: { before?: number; around?: number; limit?: number } = {}) {
+    const { chat } = await this.chats.requireMember(chatId, userId);
+    if (opts.around !== undefined) {
+      const lower = Math.max(opts.around - AROUND_WINDOW, 1);
+      const upper = opts.around + AROUND_WINDOW;
+      const rows = await this.prisma.message.findMany({ where: { chatId, seq: { gte: lower, lte: upper } }, orderBy: { seq: 'asc' }, include: REPLY_INCLUDE });
+      return { messages: rows.map(toMessageDto), hasMore: lower > 1, hasNewer: upper < chat.lastSeq };
+    }
+    const take = Math.min(Math.max(opts.limit ?? MESSAGES_PAGE_SIZE, 1), 100);
     const rows = await this.prisma.message.findMany({
-      where: { chatId, ...(before ? { seq: { lt: before } } : {}) },
+      where: { chatId, ...(opts.before ? { seq: { lt: opts.before } } : {}) },
       orderBy: { seq: 'desc' },
       take: take + 1,
       include: REPLY_INCLUDE,
     });
     const hasMore = rows.length > take;
     const page = rows.slice(0, take).reverse(); // oldest first, ready to render
-    return { messages: page.map(toMessageDto), hasMore };
+    return { messages: page.map(toMessageDto), hasMore, hasNewer: false };
   }
 
   private async validateMentions(memberIds: string[], mentionIds: string[] | undefined) {
@@ -118,6 +127,8 @@ export class MessagesService {
       data: { body: null, mentionIds: [], deletedAt: new Date() },
       include: REPLY_INCLUDE,
     });
+    // a deleted message must not stay pinned
+    if ((await this.prisma.pin.deleteMany({ where: { messageId } })).count) this.realtime.emit(chat.members.map((m) => m.userId), 'chat:pins', { chatId });
     const removedFiles = await this.files.removeForMessage(messageId);
     await this.audit.log({ actorId: userId, action: 'message.deleted', entityType: 'Message', entityId: messageId, data: { chatId, previousBody: message.body, removedFiles }, ip });
     const dto = toMessageDto(updated);

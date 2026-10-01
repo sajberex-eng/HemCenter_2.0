@@ -3,14 +3,20 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ChatsService } from './chats.service';
 import { MessagesService } from './messages.service';
-import { AddMembersDto, CreateDirectDto, CreateGroupDto, EditMessageDto, MarkReadDto, NotifyModeDto, SendMessageDto, UpdateGroupDto } from './dto';
+import { PinsService } from './pins.service';
+import { PinDto, AddMembersDto, CreateDirectDto, CreateGroupDto, EditMessageDto, MarkReadDto, NotifyModeDto, SendMessageDto, UpdateGroupDto } from './dto';
 
 const uid = (req: Request) => req.user!.id;
+/** A non-negative whole number from a query string, or undefined (so junk like "abc" is ignored, not a crash). */
+const int = (v?: string) => {
+  const n = Number(v);
+  return v !== undefined && v !== '' && Number.isInteger(n) && n >= 0 ? n : undefined;
+};
 
 @Controller('chats')
 @UseGuards(JwtAuthGuard)
 export class ChatsController {
-  constructor(private readonly chats: ChatsService, private readonly messages: MessagesService) {}
+  constructor(private readonly chats: ChatsService, private readonly messages: MessagesService, private readonly pins: PinsService) {}
 
   @Get()
   list(@Req() req: Request) {
@@ -62,8 +68,12 @@ export class ChatsController {
   }
 
   @Get(':id/messages')
-  listMessages(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request, @Query('before') before?: string, @Query('limit') limit?: string) {
-    return this.messages.list(id, uid(req), before ? Number(before) : undefined, limit ? Number(limit) : undefined);
+  listMessages(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request, @Query('before') before?: string, @Query('around') around?: string, @Query('limit') limit?: string) {
+    return this.messages.list(id, uid(req), {
+      before: int(before),
+      around: int(around),
+      limit: int(limit),
+    });
   }
 
   @Post(':id/messages')
@@ -79,5 +89,22 @@ export class ChatsController {
   @Delete(':id/messages/:messageId')
   remove(@Param('id', ParseUUIDPipe) id: string, @Param('messageId', ParseUUIDPipe) messageId: string, @Req() req: Request) {
     return this.messages.remove(id, messageId, uid(req), req.ip);
+  }
+
+  @Get(':id/pins')
+  listPins(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return this.pins.list(id, uid(req));
+  }
+
+  @Post(':id/pins')
+  @HttpCode(200)
+  pin(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PinDto, @Req() req: Request) {
+    return this.pins.pin(id, uid(req), dto.messageId, req.ip);
+  }
+
+  @Delete(':id/pins/:messageId')
+  @HttpCode(204)
+  unpin(@Param('id', ParseUUIDPipe) id: string, @Param('messageId', ParseUUIDPipe) messageId: string, @Req() req: Request) {
+    return this.pins.unpin(id, uid(req), messageId, req.ip);
   }
 }
