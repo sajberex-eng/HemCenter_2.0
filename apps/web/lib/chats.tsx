@@ -6,12 +6,21 @@ import { api } from './api';
 import { useAuth } from './auth';
 import { useI18n } from './i18n';
 import { createSocket } from './socket';
+import { loadSettings, playPing, syncPush, type NotificationSettings } from './push';
+import { wantsAlert } from './prefs';
 
 export type ChatEvent =
   | { type: 'message:new' | 'message:updated' | 'message:deleted'; message: MessageDto }
   | { type: 'chat:read'; chatId: string; userId: string; lastReadSeq: number }
   | { type: 'chat:updated'; chatId: string }
   | { type: 'resync' };
+
+export interface Toast {
+  id: string;
+  chatId: string;
+  title: string;
+  body: string;
+}
 
 interface ChatsState {
   chats: ChatDto[];
@@ -27,6 +36,10 @@ interface ChatsState {
   setActiveChat: (id: string | null) => void;
   markReadLocal: (chatId: string, seq: number) => void;
   subscribe: (handler: (e: ChatEvent) => void) => () => void;
+  toasts: Toast[];
+  dismissToast: (id: string) => void;
+  /** Reload do-not-disturb / quiet hours after they were changed. */
+  refreshPrefs: () => void;
 }
 
 const Ctx = createContext<ChatsState | null>(null);
@@ -40,6 +53,10 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [connected, setConnected] = useState(true);
   const [people, setPeople] = useState<Record<string, UserDto>>({});
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const prefs = useRef<NotificationSettings | null>(null);
+  const peopleRef = useRef<Record<string, UserDto>>({});
+  peopleRef.current = people;
   const activeChat = useRef<string | null>(null);
   const handlers = useRef(new Set<(e: ChatEvent) => void>());
   const requested = useRef(new Set<string>());
@@ -66,6 +83,17 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       if (found.length) setPeople((p) => ({ ...p, ...Object.fromEntries(found.map((u) => [u.id, u])) }));
     });
   }, []);
+
+  const refreshPrefs = useCallback(() => {
+    loadSettings().then((p) => (prefs.current = p)).catch(() => undefined);
+  }, []);
+
+  // notification preferences, and make sure this device's push subscription is known to the server
+  useEffect(() => {
+    if (!meId) return;
+    refreshPrefs();
+    void syncPush();
+  }, [meId, refreshPrefs]);
 
   // staff directory
   useEffect(() => {
@@ -104,9 +132,23 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
 
     const on = <E extends keyof ServerEvents>(event: E, fn: (p: ServerEvents[E]) => void) => socket.on(event as string, fn as (...a: unknown[]) => void);
 
+    const alertFor = (m: MessageDto) => {
+      const chat = chatsSnapshot.current.find((c) => c.id === m.chatId);
+      const seenNow = activeChat.current === m.chatId && document.visibilityState === 'visible';
+      if (m.authorId === meId || seenNow) return;
+      if (!wantsAlert(chat?.notifyMode ?? 'ALL', m.mentionIds.includes(meId), prefs.current)) return;
+      const author = peopleRef.current[m.authorId]?.fullName ?? '…';
+      const title = chat?.type === 'GROUP' && chat.title ? `${chat.title} · ${author}` : author;
+      // inside the app the text may be shown: it is our own screen, not a third-party push service
+      const body = m.body || (m.attachments[0] ? `📎 ${m.attachments[0].name}` : '');
+      setToasts((prev) => [...prev.filter((x) => x.chatId !== m.chatId), { id: m.id, chatId: m.chatId, title, body }].slice(-3));
+      playPing();
+    };
+
     on('message:new', (m) => {
       if (chatsHas(m.chatId)) bump(m);
       else reload().catch(() => undefined);
+      alertFor(m);
       emit({ type: 'message:new', message: m });
     });
     on('message:updated', (m) => {
@@ -199,8 +241,11 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         handlers.current.add(h);
         return () => handlers.current.delete(h);
       },
+      toasts,
+      dismissToast: (id) => setToasts((prev) => prev.filter((x) => x.id !== id)),
+      refreshPrefs,
     }),
-    [chats, loaded, connected, totalUnread, people, ensurePeople, reload, meId],
+    [chats, loaded, connected, totalUnread, people, ensurePeople, reload, meId, toasts, refreshPrefs],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

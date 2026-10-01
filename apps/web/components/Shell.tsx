@@ -8,6 +8,8 @@ import { useChats } from '@/lib/chats';
 import { useI18n } from '@/lib/i18n';
 import type { Key } from '@/lib/dictionaries';
 import { LocaleSwitcher } from './ui';
+import { PushPrompt } from './PushPrompt';
+import { ToastHost } from './ToastHost';
 
 interface NavItem {
   href: string;
@@ -53,6 +55,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh md:flex">
+      <ToastHost />
       <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white p-4 md:flex">
         <div className="mb-6 text-lg font-semibold text-teal-800">{t('appName')}</div>
         <nav className="flex flex-1 flex-col gap-1">
@@ -85,7 +88,10 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
-        <main className={`mx-auto w-full flex-1 ${inChats ? 'max-w-7xl' : 'max-w-5xl'} ${immersive ? 'p-0 md:p-8' : 'p-4 pb-24 md:p-8 md:pb-8'}`}>{children}</main>
+        <main className={`mx-auto w-full flex-1 ${inChats ? 'max-w-7xl' : 'max-w-5xl'} ${immersive ? 'p-0 md:p-8' : 'p-4 pb-24 md:p-8 md:pb-8'}`}>
+          {!immersive && !pathname.startsWith('/profile') && <PushPrompt />}
+          {children}
+        </main>
         <nav className={`safe-bottom fixed inset-x-0 bottom-0 overflow-x-auto border-t border-slate-200 bg-white md:hidden ${immersive ? 'hidden' : 'flex'}`}>
           {items.map((i) => (
             <Link
