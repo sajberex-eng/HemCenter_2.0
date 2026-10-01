@@ -50,6 +50,7 @@ export interface MessageDto {
   body: string | null;
   replyTo: { id: string; authorId: string; body: string | null } | null;
   mentionIds: string[];
+  attachments: AttachmentDto[];
   createdAt: string;
   editedAt: string | null;
   deleted: boolean;
@@ -82,4 +83,13 @@ export interface ServerEvents {
   'chat:read': { chatId: string; userId: string; lastReadSeq: number };
   /** Chat created, renamed, or its membership changed: clients reload the chat. */
   'chat:updated': { chatId: string };
+}
+
+export interface AttachmentDto {
+  id: string;
+  name: string;
+  /** image/png|jpeg|gif|webp for real raster images, otherwise application/octet-stream */
+  mime: string;
+  size: number;
+  isImage: boolean;
 }

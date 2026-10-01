@@ -87,3 +87,17 @@ export function tokenize(body: string, mentionNames: string[]): Piece[] {
   pushText(body.slice(last));
   return pieces;
 }
+
+/** A mention is "@" at the start or after whitespace, then up to 40 characters; names contain spaces, so spaces are allowed. */
+const MENTION_AT_END = /(^|\s)@([^@\n]{0,40})$/;
+
+/** The text typed after an "@" that ends the given text (the part before the caret), or null if none. */
+export function mentionQueryAt(beforeCaret: string): string | null {
+  const m = MENTION_AT_END.exec(beforeCaret);
+  return m ? m[2] : null;
+}
+
+/** Replaces the unfinished "@query" at the end of the text with "@name ". */
+export function completeMention(beforeCaret: string, name: string): string {
+  return beforeCaret.replace(MENTION_AT_END, (_, lead: string) => `${lead}@${name} `);
+}

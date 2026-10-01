@@ -24,7 +24,9 @@ export class NotifyModeDto {
 }
 
 export class SendMessageDto {
-  @IsString() @MinLength(1) @MaxLength(MESSAGE_MAX_LENGTH) body: string;
+  /** May be empty when the message carries files. */
+  @IsOptional() @IsString() @MaxLength(MESSAGE_MAX_LENGTH) body?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @IsUUID(undefined, { each: true }) attachmentIds?: string[];
   @IsOptional() @IsUUID() replyToId?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(50) @IsUUID(undefined, { each: true }) mentionIds?: string[];
 }

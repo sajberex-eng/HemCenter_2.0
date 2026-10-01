@@ -58,49 +58,50 @@ model Position {
 }
 
 model User {
-  id               String      @id @default(uuid())
-  login            String      @unique
-  passwordHash     String
-  mustChangePassword Boolean   @default(true)
-  fullName         String
-  phone            String?
-  email            String?
-  roles            Role[]
-  locale           Locale      @default(ru)
-  departmentId     String?
-  department       Department? @relation(fields: [departmentId], references: [id])
-  positionId       String?
-  position         Position?   @relation(fields: [positionId], references: [id])
-  isActive         Boolean     @default(true)
-  failedLogins     Int         @default(0)
-  lockedUntil      DateTime?
-  tokenVersion     Int         @default(0)
-  consentAt        DateTime?
+  id                 String       @id @default(uuid())
+  login              String       @unique
+  passwordHash       String
+  mustChangePassword Boolean      @default(true)
+  fullName           String
+  phone              String?
+  email              String?
+  roles              Role[]
+  locale             Locale       @default(ru)
+  departmentId       String?
+  department         Department?  @relation(fields: [departmentId], references: [id])
+  positionId         String?
+  position           Position?    @relation(fields: [positionId], references: [id])
+  isActive           Boolean      @default(true)
+  failedLogins       Int          @default(0)
+  lockedUntil        DateTime?
+  tokenVersion       Int          @default(0)
+  consentAt          DateTime?
   // Two-factor authentication (TOTP). The secret is stored encrypted (AES-256-GCM).
-  totpSecretEnc    String?
-  totpEnabled      Boolean     @default(false)
-  totpLastStep     Int?
+  totpSecretEnc      String?
+  totpEnabled        Boolean      @default(false)
+  totpLastStep       Int?
   totpRecoveryHashes String[]
-  lastLoginAt      DateTime?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  sessions         Session[]
-  invitations      Invitation[]
-  chatMemberships  ChatMember[]
-  messages         Message[]
-  chatsCreated     Chat[]
+  lastLoginAt        DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  sessions           Session[]
+  invitations        Invitation[]
+  chatMemberships    ChatMember[]
+  messages           Message[]
+  chatsCreated       Chat[]
+  attachments        Attachment[]
 }
 
 model Session {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash   String    @unique
-  userAgent   String?
-  ip          String?
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
 }
@@ -146,6 +147,7 @@ model Chat {
   updatedAt     DateTime     @updatedAt
   members       ChatMember[]
   messages      Message[]
+  attachments   Attachment[]
 }
 
 model ChatMember {
@@ -164,22 +166,48 @@ model ChatMember {
 }
 
 model Message {
-  id         String    @id @default(uuid())
-  chatId     String
-  chat       Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  seq        Int
-  authorId   String
-  author     User      @relation(fields: [authorId], references: [id])
+  id          String       @id @default(uuid())
+  chatId      String
+  chat        Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  seq         Int
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id])
   // null after deletion; the original text is kept in the audit log.
-  body       String?
-  replyToId  String?
-  replyTo    Message?  @relation("Replies", fields: [replyToId], references: [id])
-  replies    Message[] @relation("Replies")
-  mentionIds String[]
-  createdAt  DateTime  @default(now())
-  editedAt   DateTime?
-  deletedAt  DateTime?
+  body        String?
+  replyToId   String?
+  replyTo     Message?     @relation("Replies", fields: [replyToId], references: [id])
+  replies     Message[]    @relation("Replies")
+  attachments Attachment[]
+  mentionIds  String[]
+  createdAt   DateTime     @default(now())
+  editedAt    DateTime?
+  deletedAt   DateTime?
 
   @@unique([chatId, seq])
   @@index([authorId])
+}
+
+// A file uploaded into a chat. It exists before the message that carries it (upload first, then send),
+// and is removed from disk when that message is deleted or when it is never sent.
+model Attachment {
+  id         String    @id @default(uuid())
+  chatId     String
+  chat       Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  uploaderId String
+  uploader   User      @relation(fields: [uploaderId], references: [id])
+  messageId  String?
+  message    Message?  @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  // Display name only. The place on disk is storageKey, generated by the server.
+  name       String
+  // image/png|jpeg|gif|webp when the content really is one of those, otherwise application/octet-stream.
+  mime       String
+  size       Int
+  sha256     String
+  storageKey String    @unique
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([messageId])
+  @@index([chatId])
+  @@index([uploaderId])
 }

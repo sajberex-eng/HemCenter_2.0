@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { MESSAGE_MAX_LENGTH } from '@hemcenter/shared';
 import { useI18n } from '@/lib/i18n';
+import { completeMention, mentionQueryAt } from '@/lib/chatUtils';
 import { Avatar } from './Avatar';
 
 export interface Candidate {
@@ -21,14 +22,14 @@ export interface ComposerProps {
   onSend: (body: string, mentionIds: string[]) => Promise<boolean>;
 }
 
-const MENTION_AT_CARET = /(^|\s)@([^\s@]*)$/;
-
 export function Composer({ candidates, banner, initialText, editKey, busy, onSend }: ComposerProps) {
   const { t } = useI18n();
   const ref = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState('');
   const [picked, setPicked] = useState<Candidate[]>([]);
   const [query, setQuery] = useState<string | null>(null);
+  // Where to put the caret after the next render (set when a suggestion is inserted).
+  const [caretTo, setCaretTo] = useState<number | null>(null);
 
   // entering or leaving edit mode replaces the draft
   useEffect(() => {
@@ -36,6 +37,17 @@ export function Composer({ candidates, banner, initialText, editKey, busy, onSen
     setPicked([]);
     if (initialText !== undefined) ref.current?.focus();
   }, [editKey, initialText]);
+
+  // Placing the caret in a layout effect runs right after React commits the new text and before the browser
+  // handles another keystroke. (A requestAnimationFrame here could fire after the user had already typed a few
+  // characters and drag the caret back, scrambling the text.)
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (caretTo === null || !el) return;
+    el.focus();
+    el.setSelectionRange(caretTo, caretTo);
+    setCaretTo(null);
+  }, [caretTo]);
 
   // grow with the content, up to a limit
   useLayoutEffect(() => {
@@ -53,22 +65,18 @@ export function Composer({ candidates, banner, initialText, editKey, busy, onSen
 
   function onChange(value: string, caret: number) {
     setText(value);
-    const m = MENTION_AT_CARET.exec(value.slice(0, caret));
-    setQuery(m ? m[2] : null);
+    setQuery(mentionQueryAt(value.slice(0, caret)));
   }
 
   function pick(c: Candidate) {
     const el = ref.current;
     const caret = el?.selectionStart ?? text.length;
-    const before = text.slice(0, caret).replace(MENTION_AT_CARET, (_, lead: string) => `${lead}@${c.name} `);
+    const before = completeMention(text.slice(0, caret), c.name);
     const next = before + text.slice(caret);
     setText(next);
     setPicked((p) => (p.some((x) => x.id === c.id) ? p : [...p, c]));
     setQuery(null);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(before.length, before.length);
-    });
+    setCaretTo(before.length);
   }
 
   async function submit() {

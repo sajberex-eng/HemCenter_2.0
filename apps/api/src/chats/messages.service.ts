@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ChatsService } from './chats.service';
+import { FilesService } from '../files/files.service';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '../files/file-rules';
 import { REPLY_INCLUDE, toMessageDto } from './mappers';
 
 @Injectable()
@@ -13,6 +15,7 @@ export class MessagesService {
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
     private readonly chats: ChatsService,
+    private readonly files: FilesService,
   ) {}
 
   /** Newest first by number; pass the smallest seq you already have as `before` to load older ones. */
@@ -36,10 +39,12 @@ export class MessagesService {
     return unique;
   }
 
-  async create(chatId: string, userId: string, input: { body: string; replyToId?: string; mentionIds?: string[] }): Promise<MessageDto> {
+  async create(chatId: string, userId: string, input: { body?: string; replyToId?: string; mentionIds?: string[]; attachmentIds?: string[] }): Promise<MessageDto> {
     const { chat } = await this.chats.requireMember(chatId, userId);
-    const body = input.body.trim();
-    if (!body) throw new BadRequestException('EMPTY_MESSAGE');
+    const body = (input.body ?? '').trim();
+    const attachmentIds = [...new Set(input.attachmentIds ?? [])];
+    if (!body && attachmentIds.length === 0) throw new BadRequestException('EMPTY_MESSAGE');
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_MESSAGE) throw new BadRequestException('TOO_MANY_ATTACHMENTS');
     const memberIds = chat.members.map((m) => m.userId);
     const mentionIds = await this.validateMentions(memberIds, input.mentionIds);
     if (input.replyToId) {
@@ -52,12 +57,20 @@ export class MessagesService {
       const updated = await tx.chat.update({ where: { id: chatId }, data: { lastSeq: { increment: 1 }, lastMessageAt: new Date() } });
       const created = await tx.message.create({
         data: { chatId, seq: updated.lastSeq, authorId: userId, body, replyToId: input.replyToId, mentionIds },
-        include: REPLY_INCLUDE,
       });
+      if (attachmentIds.length) {
+        // Only the sender's own, still unsent files of this very chat can be attached. The conditional update
+        // also settles races: if two messages claim one file, one of them matches fewer rows and rolls back.
+        const claimed = await tx.attachment.updateMany({
+          where: { id: { in: attachmentIds }, uploaderId: userId, chatId, messageId: null, deletedAt: null },
+          data: { messageId: created.id },
+        });
+        if (claimed.count !== attachmentIds.length) throw new BadRequestException('ATTACHMENT_INVALID');
+      }
       // Sending must NOT move the author's read pointer: they may have written from another device or a
       // notification without opening the chat, and a false "read" receipt would mislead everyone else.
       // Own messages never count as unread anyway (the unread query excludes the author).
-      return created;
+      return tx.message.findUniqueOrThrow({ where: { id: created.id }, include: REPLY_INCLUDE });
     });
 
     const dto = toMessageDto(message);
@@ -101,7 +114,8 @@ export class MessagesService {
       data: { body: null, mentionIds: [], deletedAt: new Date() },
       include: REPLY_INCLUDE,
     });
-    await this.audit.log({ actorId: userId, action: 'message.deleted', entityType: 'Message', entityId: messageId, data: { chatId, previousBody: message.body }, ip });
+    const removedFiles = await this.files.removeForMessage(messageId);
+    await this.audit.log({ actorId: userId, action: 'message.deleted', entityType: 'Message', entityId: messageId, data: { chatId, previousBody: message.body, removedFiles }, ip });
     const dto = toMessageDto(updated);
     this.realtime.emit(chat.members.map((m) => m.userId), 'message:deleted', dto);
     return dto;

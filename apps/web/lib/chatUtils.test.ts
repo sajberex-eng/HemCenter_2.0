@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatDto } from '@hemcenter/shared';
-import { chatTitle, colorFor, dayKey, initials, tokenize } from './chatUtils';
+import { chatTitle, colorFor, completeMention, dayKey, initials, mentionQueryAt, tokenize } from './chatUtils';
 
 const kinds = (body: string, names: string[] = []) => tokenize(body, names).map((p) => `${p.kind}:${p.text}`);
 
@@ -64,5 +64,33 @@ describe('helpers', () => {
   it('groups messages by local calendar day', () => {
     expect(dayKey('2026-03-05T10:00:00')).toBe(dayKey('2026-03-05T23:59:00'));
     expect(dayKey('2026-03-05T10:00:00')).not.toBe(dayKey('2026-03-06T00:01:00'));
+  });
+});
+
+describe('mention typing', () => {
+  it('finds the query after an @ at the start or after whitespace', () => {
+    expect(mentionQueryAt('@')).toBe('');
+    expect(mentionQueryAt('Привет @Бо')).toBe('Бо');
+    expect(mentionQueryAt('Привет, @')).toBe('');
+  });
+
+  it('keeps suggesting while a full name with spaces is typed', () => {
+    expect(mentionQueryAt('Коллеги, @Борис Те')).toBe('Борис Те');
+  });
+
+  it('ignores @ inside words such as e-mail addresses, and stops at a newline or a second @', () => {
+    expect(mentionQueryAt('пишите на ivan@mail.kz')).toBeNull();
+    expect(mentionQueryAt('@Анна\nдальше')).toBeNull();
+    expect(mentionQueryAt('@Анна и @Бо')).toBe('Бо');
+    expect(mentionQueryAt('обычный текст')).toBeNull();
+  });
+
+  it('does not search for absurdly long queries', () => {
+    expect(mentionQueryAt('@' + 'x'.repeat(41))).toBeNull();
+  });
+
+  it('replaces the unfinished mention with the full name', () => {
+    expect(completeMention('Коллеги, @Бор', 'Борис Тестов')).toBe('Коллеги, @Борис Тестов ');
+    expect(completeMention('@', 'Анна Петрова')).toBe('@Анна Петрова ');
   });
 });

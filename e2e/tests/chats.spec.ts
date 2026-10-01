@@ -13,6 +13,7 @@ async function startDirect(page: Page, fullName: string) {
 
 const composer = (page: Page) => page.getByRole('textbox', { name: 'Сообщение' });
 const sendButton = (page: Page) => page.getByRole('button', { name: 'Отправить' });
+/** All messages containing the text. A quote inside a reply repeats the original text, so use .first() for the original. */
 const bubble = (page: Page, text: string) => page.getByTestId('message').filter({ hasText: text });
 
 async function say(page: Page, text: string) {
@@ -57,20 +58,23 @@ test.describe('direct chat', () => {
     await expect(quoted.getByText('Добрый день! Прошу подтвердить получение.')).toBeVisible();
 
     // Anna edits her message; Boris sees it change with a mark
-    await bubble(a.page, 'Добрый день!').getByRole('button', { name: 'Действия' }).click();
+    await bubble(a.page, 'Добрый день!').first().getByRole('button', { name: 'Действия' }).click();
     await a.page.getByRole('button', { name: 'Изменить' }).click();
     await composer(a.page).fill('Добрый день! Прошу подтвердить получение до 17:00.');
     await sendButton(a.page).click();
-    const edited = bubble(b.page, 'до 17:00');
+    const edited = bubble(b.page, 'до 17:00').first(); // the original; Boris's reply quotes it too
     await expect(edited).toBeVisible();
     await expect(edited.getByText('изменено')).toBeVisible();
+    // the quote inside Boris's own reply follows the edit
+    await expect(bubble(b.page, 'Получил, спасибо.').getByText('до 17:00')).toBeVisible();
 
     // Anna deletes it; Boris sees the placeholder and the text is gone from his page
     a.page.once('dialog', (d) => d.accept());
-    await bubble(a.page, 'до 17:00').getByRole('button', { name: 'Действия' }).click();
+    await bubble(a.page, 'до 17:00').first().getByRole('button', { name: 'Действия' }).click();
     await a.page.getByRole('button', { name: 'Удалить' }).click();
     await expect(b.page.getByText('Сообщение удалено').first()).toBeVisible();
-    await expect(b.page.getByText('до 17:00')).toHaveCount(0);
+    // neither the message nor its quote inside Boris's own reply may keep showing the deleted text
+    await expect(b.page.getByText('Прошу подтвердить получение')).toHaveCount(0);
 
     await a.ctx.close();
     await b.ctx.close();
@@ -94,7 +98,8 @@ test.describe('direct chat', () => {
     await expect(bubble(b.page, '<script>alert(2)</script>')).toBeVisible(); // shown literally
     await expect(b.page.locator('img[src="x"]')).toHaveCount(0);
     await expect(b.page.locator('a[href^="javascript"]')).toHaveCount(0);
-    const link = b.page.getByRole('link', { name: 'https://example.kz/reglament.pdf' });
+    // inside the conversation only: the chat list preview shows the same text
+    const link = b.page.getByTestId('messages').getByRole('link', { name: 'https://example.kz/reglament.pdf' });
     await expect(link).toHaveAttribute('href', 'https://example.kz/reglament.pdf');
     await expect(link).toHaveAttribute('rel', /noopener/);
     expect(dialogs).toBe(0);

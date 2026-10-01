@@ -26,6 +26,16 @@ function merge(list: MessageDto[], incoming: MessageDto[]): MessageDto[] {
   return [...byId.values()].sort((a, b) => a.seq - b.seq);
 }
 
+/**
+ * Applies an edited or deleted message, and refreshes quotes of it inside replies: a reply keeps a copy of the
+ * quoted text, which must not outlive a deletion on pages that are already open.
+ */
+function applyChange(list: MessageDto[], changed: MessageDto): MessageDto[] {
+  return merge(list, [changed]).map((m) =>
+    m.replyTo?.id === changed.id ? { ...m, replyTo: { ...m.replyTo, body: changed.deleted ? null : changed.body } } : m,
+  );
+}
+
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, locale } = useI18n();
@@ -99,7 +109,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       subscribe((e) => {
         if (e.type === 'resync') void loadLatest();
         else if ((e.type === 'message:new' || e.type === 'message:updated' || e.type === 'message:deleted') && e.message.chatId === id) {
-          setMessages((prev) => merge(prev, [e.message]));
+          setMessages((prev) => (e.type === 'message:new' ? merge(prev, [e.message]) : applyChange(prev, e.message)));
           if (e.type === 'message:new' && e.message.authorId !== meId && !stick.current) setUnseen(true);
         }
       }),
@@ -173,7 +183,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     try {
       if (editing) {
         const updated = await api<MessageDto>(`/chats/${id}/messages/${editing.id}`, { method: 'PATCH', body: { body, mentionIds } });
-        setMessages((prev) => merge(prev, [updated]));
+        setMessages((prev) => applyChange(prev, updated));
         setEditing(null);
       } else {
         const created = await api<MessageDto>(`/chats/${id}/messages`, { method: 'POST', body: { body, mentionIds, ...(replyTo ? { replyToId: replyTo.id } : {}) } });
@@ -193,7 +203,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     if (!confirm(t('chats.confirmDeleteMessage'))) return;
     try {
       const deleted = await api<MessageDto>(`/chats/${id}/messages/${m.id}`, { method: 'DELETE' });
-      setMessages((prev) => merge(prev, [deleted]));
+      setMessages((prev) => applyChange(prev, deleted));
     } catch (e) {
       setError(errorText(e));
     }
