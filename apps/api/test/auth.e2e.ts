@@ -1,0 +1,187 @@
+import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { bearer, createApp, loginAs, makeUser, PASSWORD, prisma, resetDb } from './helpers';
+
+let app: INestApplication;
+const http = () => request(app.getHttpServer());
+
+beforeAll(async () => {
+  app = await createApp();
+});
+afterAll(async () => {
+  await app.close();
+  await prisma.$disconnect();
+});
+beforeEach(resetDb);
+
+describe('auth', () => {
+  it('logs in and returns the profile', async () => {
+    await makeUser('anna');
+    const res = await loginAs(app, 'Anna');
+    expect(res.status).toBe(200);
+    expect(res.body.accessToken).toBeTruthy();
+    const me = await http().get('/api/auth/me').set(bearer(res.body.accessToken));
+    expect(me.body.login).toBe('anna');
+    expect(me.body).not.toHaveProperty('passwordHash');
+  });
+
+  it('rejects wrong password and unknown login with the same error', async () => {
+    await makeUser('anna');
+    const a = await loginAs(app, 'anna', 'wrong-password-1');
+    const b = await loginAs(app, 'nobody', 'wrong-password-1');
+    expect(a.status).toBe(401);
+    expect(b.status).toBe(401);
+    expect(a.body.message).toBe(b.body.message);
+  });
+
+  it('locks the account after 5 failed attempts, even for the right password', async () => {
+    await makeUser('anna');
+    for (let i = 0; i < 5; i++) expect((await loginAs(app, 'anna', 'wrong-password-1')).status).toBe(401);
+    const locked = await loginAs(app, 'anna');
+    expect(locked.status).toBe(403);
+    expect(locked.body.message).toBe('ACCOUNT_LOCKED');
+  });
+
+  it('requires a token for protected routes', async () => {
+    expect((await http().get('/api/auth/me')).status).toBe(401);
+    expect((await http().get('/api/users')).status).toBe(401);
+  });
+
+  it('rotates the refresh token and detects reuse', async () => {
+    await makeUser('anna');
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/api/auth/login').send({ login: 'anna', password: PASSWORD }).expect(200);
+    const first = (await agent.post('/api/auth/refresh').expect(200)).headers['set-cookie'];
+    expect(first).toBeTruthy();
+    // replay of the first (now rotated) cookie must fail and burn all sessions
+    const login = await loginAs(app, 'anna');
+    const oldCookie = login.headers['set-cookie'];
+    await http().post('/api/auth/refresh').set('Cookie', oldCookie).expect(200); // rotates it
+    const replay = await http().post('/api/auth/refresh').set('Cookie', oldCookie);
+    expect(replay.status).toBe(401);
+    const user = await prisma.user.findUnique({ where: { login: 'anna' } });
+    const active = await prisma.session.count({ where: { userId: user!.id, revokedAt: null } });
+    expect(active).toBe(0);
+  });
+
+  it('invalidates access tokens after logout-all', async () => {
+    await makeUser('anna');
+    const { body } = await loginAs(app, 'anna');
+    await http().post('/api/auth/logout-all').set(bearer(body.accessToken)).expect(204);
+    expect((await http().get('/api/auth/me').set(bearer(body.accessToken))).status).toBe(401);
+  });
+
+  it('enforces the password policy on change', async () => {
+    await makeUser('anna');
+    const { body } = await loginAs(app, 'anna');
+    const weak = await http().post('/api/auth/change-password').set(bearer(body.accessToken)).send({ currentPassword: PASSWORD, newPassword: 'short1' });
+    expect(weak.status).toBe(400);
+    const noDigit = await http().post('/api/auth/change-password').set(bearer(body.accessToken)).send({ currentPassword: PASSWORD, newPassword: 'onlyletterslong' });
+    expect(noDigit.status).toBe(400);
+    const ok = await http().post('/api/auth/change-password').set(bearer(body.accessToken)).send({ currentPassword: PASSWORD, newPassword: 'N3w-password-ok' });
+    expect(ok.status).toBe(204);
+    expect((await loginAs(app, 'anna', 'N3w-password-ok')).status).toBe(200);
+    expect((await loginAs(app, 'anna', PASSWORD)).status).toBe(401);
+  });
+});
+
+describe('rate limiting', () => {
+  it('limits login attempts per minute', async () => {
+    process.env.DISABLE_THROTTLE = 'false';
+    try {
+      const statuses: number[] = [];
+      for (let i = 0; i < 12; i++) statuses.push((await loginAs(app, 'nobody', 'wrong-password-1')).status);
+      expect(statuses.slice(0, 10).every((s) => s === 401)).toBe(true);
+      expect(statuses[11]).toBe(429);
+    } finally {
+      process.env.DISABLE_THROTTLE = 'true';
+    }
+  });
+});
+
+describe('users and roles', () => {
+  it('forbids employees from managing users, allows the directory', async () => {
+    await makeUser('anna');
+    const { body } = await loginAs(app, 'anna');
+    expect((await http().get('/api/users').set(bearer(body.accessToken))).status).toBe(200);
+    const create = await http().post('/api/users').set(bearer(body.accessToken)).send({ login: 'bob', fullName: 'Bob Bobov', roles: ['EMPLOYEE'] });
+    expect(create.status).toBe(403);
+  });
+
+  it('admin invites an employee who sets a password and consents', async () => {
+    await makeUser('root', ['ADMIN']);
+    const admin = (await loginAs(app, 'root')).body.accessToken;
+    const created = await http().post('/api/users').set(bearer(admin)).send({ login: 'bob', fullName: 'Bob Bobov', roles: ['EMPLOYEE'], locale: 'kk' });
+    expect(created.status).toBe(201);
+    const token = created.body.inviteToken;
+    // no password is usable before the invitation is accepted
+    expect((await loginAs(app, 'bob', PASSWORD)).status).toBe(401);
+    const noConsent = await http().post('/api/auth/accept-invite').send({ token, password: PASSWORD, consent: false });
+    expect(noConsent.status).toBe(400);
+    const accepted = await http().post('/api/auth/accept-invite').send({ token, password: PASSWORD, consent: true });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.user.locale).toBe('kk');
+    expect((await prisma.user.findUnique({ where: { login: 'bob' } }))!.consentAt).not.toBeNull();
+    // the link is single-use
+    expect((await http().post('/api/auth/accept-invite').send({ token, password: PASSWORD, consent: true })).status).toBe(400);
+  });
+
+  it('rejects duplicate logins and unknown roles', async () => {
+    await makeUser('root', ['ADMIN']);
+    await makeUser('anna');
+    const admin = (await loginAs(app, 'root')).body.accessToken;
+    expect((await http().post('/api/users').set(bearer(admin)).send({ login: 'anna', fullName: 'Anna A', roles: ['EMPLOYEE'] })).status).toBe(409);
+    expect((await http().post('/api/users').set(bearer(admin)).send({ login: 'x1y', fullName: 'Anna A', roles: ['GOD'] })).status).toBe(400);
+  });
+
+  it('deactivation kicks the user out immediately; admin cannot deactivate themselves', async () => {
+    const root = await makeUser('root', ['ADMIN']);
+    const anna = await makeUser('anna');
+    const admin = (await loginAs(app, 'root')).body.accessToken;
+    const annaToken = (await loginAs(app, 'anna')).body.accessToken;
+    await http().patch(`/api/users/${anna.id}`).set(bearer(admin)).send({ isActive: false }).expect(200);
+    expect((await http().get('/api/auth/me').set(bearer(annaToken))).status).toBe(401);
+    expect((await loginAs(app, 'anna')).status).toBe(401);
+    const self = await http().patch(`/api/users/${root.id}`).set(bearer(admin)).send({ isActive: false });
+    expect(self.status).toBe(400);
+  });
+
+  it('role change takes effect on the next request', async () => {
+    const root = await makeUser('root', ['ADMIN']);
+    const anna = await makeUser('anna', ['ADMIN']);
+    const annaToken = (await loginAs(app, 'anna')).body.accessToken;
+    expect((await http().get('/api/audit').set(bearer(annaToken))).status).toBe(200);
+    const admin = (await loginAs(app, 'root')).body.accessToken;
+    await http().patch(`/api/users/${anna.id}`).set(bearer(admin)).send({ roles: ['EMPLOYEE'] }).expect(200);
+    const again = (await loginAs(app, 'anna')).body.accessToken;
+    expect((await http().get('/api/audit').set(bearer(again))).status).toBe(403);
+    expect(root.id).toBeTruthy();
+  });
+});
+
+describe('org structure', () => {
+  it('admin manages departments; employees can only read', async () => {
+    await makeUser('root', ['ADMIN']);
+    await makeUser('anna');
+    const admin = (await loginAs(app, 'root')).body.accessToken;
+    const anna = (await loginAs(app, 'anna')).body.accessToken;
+    const dep = await http().post('/api/departments').set(bearer(admin)).send({ nameRu: 'Бухгалтерия', nameKk: 'Бухгалтерия' });
+    expect(dep.status).toBe(201);
+    expect((await http().post('/api/departments').set(bearer(anna)).send({ nameRu: 'Х', nameKk: 'Х' })).status).toBe(403);
+    expect((await http().get('/api/departments').set(bearer(anna))).body).toHaveLength(1);
+    await http().delete(`/api/departments/${dep.body.id}`).set(bearer(admin)).expect(204);
+  });
+});
+
+describe('audit log', () => {
+  it('records actions and cannot be modified or deleted', async () => {
+    await makeUser('root', ['ADMIN']);
+    const admin = (await loginAs(app, 'root')).body.accessToken;
+    await http().post('/api/positions').set(bearer(admin)).send({ nameRu: 'Юрист', nameKk: 'Заңгер' }).expect(201);
+    const list = await http().get('/api/audit').set(bearer(admin));
+    expect(list.body.map((r: { action: string }) => r.action)).toEqual(expect.arrayContaining(['auth.login', 'position.created']));
+    await expect(prisma.auditLog.deleteMany()).rejects.toThrow(/append-only/);
+    await expect(prisma.auditLog.updateMany({ data: { action: 'x' } })).rejects.toThrow(/append-only/);
+  });
+});

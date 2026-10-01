@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGEMENT
+  SECRETARY
+  PROJECT_MANAGER
+  EMPLOYEE
+}
+
+enum Locale {
+  ru
+  kk
+}
+
+model Department {
+  id        String       @id @default(uuid())
+  nameRu    String
+  nameKk    String
+  parentId  String?
+  parent    Department?  @relation("DepartmentTree", fields: [parentId], references: [id])
+  children  Department[] @relation("DepartmentTree")
+  users     User[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Position {
+  id        String   @id @default(uuid())
+  nameRu    String
+  nameKk    String
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id               String      @id @default(uuid())
+  login            String      @unique
+  passwordHash     String
+  mustChangePassword Boolean   @default(true)
+  fullName         String
+  phone            String?
+  email            String?
+  roles            Role[]
+  locale           Locale      @default(ru)
+  departmentId     String?
+  department       Department? @relation(fields: [departmentId], references: [id])
+  positionId       String?
+  position         Position?   @relation(fields: [positionId], references: [id])
+  isActive         Boolean     @default(true)
+  failedLogins     Int         @default(0)
+  lockedUntil      DateTime?
+  tokenVersion     Int         @default(0)
+  consentAt        DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  sessions         Session[]
+  invitations      Invitation[]
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  userAgent   String?
+  ip          String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Invitation {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// Append-only: UPDATE and DELETE are blocked by a database trigger (see migration).
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  at         DateTime @default(now())
+  actorId    String?
+  action     String
+  entityType String?
+  entityId   String?
+  data       Json?
+  ip         String?
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([at])
+}

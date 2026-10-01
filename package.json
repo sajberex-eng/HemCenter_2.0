@@ -1,0 +1,12 @@
+{
+  "name": "hemcenter",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @hemcenter/api dev",
+    "dev:web": "pnpm --filter @hemcenter/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  }
+}
