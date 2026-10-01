@@ -22,9 +22,10 @@ export class MessagesService {
 
   /**
    * Newest first by number; pass the smallest seq you already have as `before` to load older ones.
-   * With `around` (a search hit) returns a window of messages on both sides of that number instead.
+   * With `around` (a search hit) returns a window of messages on both sides of that number instead, and with
+   * `after` the next page of newer messages (to scroll forward from such a window).
    */
-  async list(chatId: string, userId: string, opts: { before?: number; around?: number; limit?: number } = {}) {
+  async list(chatId: string, userId: string, opts: { before?: number; after?: number; around?: number; limit?: number } = {}) {
     const { chat } = await this.chats.requireMember(chatId, userId);
     if (opts.around !== undefined) {
       const lower = Math.max(opts.around - AROUND_WINDOW, 1);
@@ -33,6 +34,12 @@ export class MessagesService {
       return { messages: rows.map(toMessageDto), hasMore: lower > 1, hasNewer: upper < chat.lastSeq };
     }
     const take = Math.min(Math.max(opts.limit ?? MESSAGES_PAGE_SIZE, 1), 100);
+    if (opts.after !== undefined) {
+      // moving forward from a hit: the next page of newer messages, oldest first
+      const newer = await this.prisma.message.findMany({ where: { chatId, seq: { gt: opts.after } }, orderBy: { seq: 'asc' }, take: take + 1, include: REPLY_INCLUDE });
+      const hasNewer = newer.length > take;
+      return { messages: newer.slice(0, take).map(toMessageDto), hasMore: opts.after > 0, hasNewer };
+    }
     const rows = await this.prisma.message.findMany({
       where: { chatId, ...(opts.before ? { seq: { lt: opts.before } } : {}) },
       orderBy: { seq: 'desc' },

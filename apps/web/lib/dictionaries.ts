@@ -239,6 +239,21 @@ const ru = {
   'notif.later': 'Позже',
   'err.PUSH_ENDPOINT_NOT_ALLOWED': 'Этот браузер использует неподдерживаемый сервис уведомлений.',
   'err.INVALID_TIME': 'Время указано неверно.',
+  'chats.search': 'Поиск по чатам и сообщениям',
+  'chats.searchMessages': 'Сообщения',
+  'chats.searchChats': 'Чаты',
+  'chats.searchEmpty': 'Ничего не найдено',
+  'chats.searchTooShort': 'Введите не меньше двух символов, чтобы искать по сообщениям.',
+  'chats.searchMore': 'Показать ещё',
+  'chats.clear': 'Очистить',
+  'chats.pin': 'Закрепить',
+  'chats.unpin': 'Открепить',
+  'chats.pinned': 'Закреплённое',
+  'chats.toLatest': 'К последним сообщениям',
+  'chats.loadNewer': 'Показать более поздние',
+  'err.QUERY_TOO_SHORT': 'Запрос слишком короткий.',
+  'err.QUERY_TOO_LONG': 'Запрос слишком длинный.',
+  'err.TOO_MANY_PINS': 'Можно закрепить не больше 5 сообщений.',
 } as const;
 
 export type Key = keyof typeof ru;
@@ -482,6 +497,21 @@ const kk: Record<Key, string> = {
   'notif.later': 'Кейінірек',
   'err.PUSH_ENDPOINT_NOT_ALLOWED': 'Бұл браузер қолдау көрсетілмейтін хабарландыру қызметін пайдаланады.',
   'err.INVALID_TIME': 'Уақыт қате көрсетілген.',
+  'chats.search': 'Чаттар мен хабарламалар бойынша іздеу',
+  'chats.searchMessages': 'Хабарламалар',
+  'chats.searchChats': 'Чаттар',
+  'chats.searchEmpty': 'Ештеңе табылмады',
+  'chats.searchTooShort': 'Хабарламалардан іздеу үшін кемінде екі таңба енгізіңіз.',
+  'chats.searchMore': 'Тағы көрсету',
+  'chats.clear': 'Тазарту',
+  'chats.pin': 'Бекіту',
+  'chats.unpin': 'Бекітуді алу',
+  'chats.pinned': 'Бекітілген',
+  'chats.toLatest': 'Соңғы хабарламаларға',
+  'chats.loadNewer': 'Кейінгілерін көрсету',
+  'err.QUERY_TOO_SHORT': 'Сұраныс тым қысқа.',
+  'err.QUERY_TOO_LONG': 'Сұраныс тым ұзын.',
+  'err.TOO_MANY_PINS': '5 хабарламадан артық бекітуге болмайды.',
 };
 
 export const dictionaries: Record<Locale, Record<Key, string>> = { ru, kk };

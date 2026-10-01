@@ -16,12 +16,17 @@ interface Props {
   mentionNames: string[];
   replyAuthorName?: string;
   readState?: ReadState;
+  /** Briefly emphasised after jumping to it from a search result or a pin. */
+  highlighted?: boolean;
+  canPin?: boolean;
+  pinned?: boolean;
+  onTogglePin?: () => void;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, onReply, onEdit, onDelete }: Props) {
+export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, canPin, pinned, onTogglePin, onReply, onEdit, onDelete }: Props) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -45,7 +50,7 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
 
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-seq={message.seq}>
-      <div className={`group max-w-[85%] rounded-2xl px-3 py-2 shadow-sm md:max-w-[70%] ${mine ? 'rounded-br-sm bg-teal-100' : 'rounded-bl-sm bg-white'}`}>
+      <div className={`group max-w-[85%] rounded-2xl px-3 py-2 shadow-sm transition-shadow md:max-w-[70%] ${mine ? 'rounded-br-sm bg-teal-100' : 'rounded-bl-sm bg-white'} ${highlighted ? 'ring-2 ring-yellow-400' : ''}`}>
         {authorName && !mine && <div className="mb-0.5 text-xs font-medium text-teal-800">{authorName}</div>}
 
         {message.replyTo && (
@@ -108,6 +113,11 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
             <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onReply(); }}>
               {t('chats.reply')}
             </button>
+            {canPin && onTogglePin && (
+              <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onTogglePin(); }}>
+                {pinned ? t('chats.unpin') : t('chats.pin')}
+              </button>
+            )}
             {mine && (
               <>
                 <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onEdit(); }}>

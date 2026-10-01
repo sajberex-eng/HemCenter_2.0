@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatDto } from '@hemcenter/shared';
-import { chatTitle, colorFor, completeMention, dayKey, initials, mentionQueryAt, tokenize } from './chatUtils';
+import { chatTitle, colorFor, completeMention, dayKey, highlight, initials, mentionQueryAt, snippet, tokenize } from './chatUtils';
 
 const kinds = (body: string, names: string[] = []) => tokenize(body, names).map((p) => `${p.kind}:${p.text}`);
 
@@ -92,5 +92,42 @@ describe('mention typing', () => {
   it('replaces the unfinished mention with the full name', () => {
     expect(completeMention('Коллеги, @Бор', 'Борис Тестов')).toBe('Коллеги, @Борис Тестов ');
     expect(completeMention('@', 'Анна Петрова')).toBe('@Анна Петрова ');
+  });
+});
+
+describe('highlight', () => {
+  const marks = (t: string, q: string) => highlight(t, q).map((m) => `${m.hit ? '[' : ''}${m.text}${m.hit ? ']' : ''}`).join('');
+
+  it('marks every occurrence regardless of case', () => {
+    expect(marks('Приказ и приказы', 'приказ')).toBe('[Приказ] и [приказ]ы');
+    expect(marks('Қазақстан', 'ҚАЗАҚ')).toBe('[Қазақ]стан');
+  });
+
+  it('treats the search text literally, not as a pattern', () => {
+    expect(marks('цена 1.5 (скидка)', '(скидка)')).toBe('цена 1.5 [(скидка)]');
+    expect(marks('a.b axb', 'a.b')).toBe('[a.b] axb');
+    expect(marks('100% и 1000', '100%')).toBe('[100%] и 1000');
+    expect(marks('[x] y', '[x]')).toBe('[[x]] y');
+  });
+
+  it('returns the text untouched when there is nothing to mark', () => {
+    expect(highlight('текст', '')).toEqual([{ text: 'текст', hit: false }]);
+    expect(highlight('текст', 'нет')).toEqual([{ text: 'текст', hit: false }]);
+    expect(highlight('', 'нет')).toEqual([{ text: '', hit: false }]);
+  });
+});
+
+describe('snippet', () => {
+  it('shortens a long message around the first hit', () => {
+    const long = 'а'.repeat(200) + ' ПРИКАЗ ' + 'б'.repeat(200);
+    const s = snippet(long, 'приказ');
+    expect(s.startsWith('…')).toBe(true);
+    expect(s.endsWith('…')).toBe(true);
+    expect(s.toLowerCase()).toContain('приказ');
+    expect(s.length).toBeLessThan(120);
+  });
+
+  it('keeps short messages whole', () => {
+    expect(snippet('короткий текст', 'текст')).toBe('короткий текст');
   });
 });

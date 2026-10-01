@@ -13,6 +13,7 @@ export type ChatEvent =
   | { type: 'message:new' | 'message:updated' | 'message:deleted'; message: MessageDto }
   | { type: 'chat:read'; chatId: string; userId: string; lastReadSeq: number }
   | { type: 'chat:updated'; chatId: string }
+  | { type: 'chat:pins'; chatId: string }
   | { type: 'resync' };
 
 export interface Toast {
@@ -191,6 +192,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       );
       emit({ type: 'chat:read', ...e });
     });
+    on('chat:pins', (e) => emit({ type: 'chat:pins', chatId: e.chatId }));
     on('chat:updated', (e) => {
       reload().catch(() => undefined);
       emit({ type: 'chat:updated', chatId: e.chatId });

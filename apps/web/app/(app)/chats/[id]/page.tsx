@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MESSAGES_PAGE_SIZE, type ChatDto, type MessageDto } from '@hemcenter/shared';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -17,6 +18,8 @@ import { ErrorText, useErrorText } from '@/components/ui';
 interface Page {
   messages: MessageDto[];
   hasMore: boolean;
+  /** True when newer messages exist beyond what was returned (a window around a search hit). */
+  hasNewer?: boolean;
 }
 
 /** Inserts or replaces by id, keeping the list ordered by message number. */
@@ -37,7 +40,19 @@ function applyChange(list: MessageDto[], changed: MessageDto): MessageDto[] {
 }
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
+  // useSearchParams needs a Suspense boundary
+  return (
+    <Suspense fallback={null}>
+      <Conversation params={params} />
+    </Suspense>
+  );
+}
+
+function Conversation({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const jumpParam = useSearchParams().get('m');
+  const jump = jumpParam && /^\d+$/.test(jumpParam) ? Number(jumpParam) : null;
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const { chats, loaded, nameOf, ensurePeople, setActiveChat, markReadLocal, subscribe, connected } = useChats();
@@ -55,10 +70,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [editing, setEditing] = useState<MessageDto | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [unseen, setUnseen] = useState(false);
+  const [hasNewer, setHasNewer] = useState(false);
+  const [highlightSeq, setHighlightSeq] = useState<number | null>(null);
+  const [pins, setPins] = useState<MessageDto[]>([]);
+  const [pinIndex, setPinIndex] = useState(0);
 
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true); // follow new messages only while the reader is at the bottom
   const prependFrom = useRef<number | null>(null);
+  const pendingJump = useRef<number | null>(null); // scroll to this message number once it is rendered
 
   // ---- loading ------------------------------------------------------------------------------------------------
   // A resync after reconnecting merges the newest page without throwing away older pages the reader loaded.
@@ -77,6 +97,29 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     // only the conversation id should restart loading (errorText is recreated on every render)
   }, [id]);
 
+  /** Opens the conversation at a search hit: a window of messages around it instead of the newest ones. */
+  const loadAround = useCallback(
+    async (seq: number) => {
+      try {
+        const page = await api<Page>(`/chats/${id}/messages?around=${seq}`);
+        setMessages(page.messages);
+        setHasMore(page.hasMore);
+        setHasNewer(!!page.hasNewer);
+        pendingJump.current = seq;
+        firstLoadDone.current = true;
+        setReady(true);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) setMissing(true);
+        else setError(errorText(e));
+      }
+    },
+    [id],
+  );
+
+  const loadPins = useCallback(() => {
+    api<MessageDto[]>(`/chats/${id}/pins`).then((list) => { setPins(list); setPinIndex(0); }).catch(() => undefined);
+  }, [id]);
+
   useEffect(() => {
     firstLoadDone.current = false;
     setMessages([]);
@@ -85,9 +128,41 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     setReplyTo(null);
     setEditing(null);
     setInfoOpen(false);
-    stick.current = true;
-    void loadLatest();
-  }, [id, loadLatest]);
+    setHasNewer(false);
+    setHighlightSeq(null);
+    stick.current = jump === null;
+    if (jump !== null) void loadAround(jump);
+    else void loadLatest();
+  }, [id, jump, loadLatest, loadAround]);
+
+  useEffect(() => {
+    setPins([]);
+    loadPins();
+  }, [id, loadPins]);
+
+  /** Back from a search hit to the end of the conversation. */
+  function goLatest() {
+    if (jump !== null) router.replace(`/chats/${id}`);
+    else {
+      setHasNewer(false);
+      setMessages([]);
+      firstLoadDone.current = false;
+      stick.current = true;
+      void loadLatest();
+    }
+  }
+
+  async function loadNewer() {
+    const newest = messages[messages.length - 1]?.seq;
+    if (!newest) return;
+    try {
+      const page = await api<Page>(`/chats/${id}/messages?limit=${MESSAGES_PAGE_SIZE}&after=${newest}`);
+      setMessages((prev) => merge(prev, page.messages));
+      setHasNewer(!!page.hasNewer);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
 
   async function loadOlder() {
     const oldest = messages[0]?.seq;
@@ -107,13 +182,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   useEffect(
     () =>
       subscribe((e) => {
-        if (e.type === 'resync') void loadLatest();
+        if (e.type === 'resync') {
+          if (!hasNewer) void loadLatest(); // inside a window around a hit, merging the newest page would leave a gap
+          loadPins();
+        } else if (e.type === 'chat:pins' && e.chatId === id) loadPins();
         else if ((e.type === 'message:new' || e.type === 'message:updated' || e.type === 'message:deleted') && e.message.chatId === id) {
+          // new messages are not appended while the reader is in the middle of history: "to the latest" brings them
+          if (e.type === 'message:new' && hasNewer) return;
           setMessages((prev) => (e.type === 'message:new' ? merge(prev, [e.message]) : applyChange(prev, e.message)));
           if (e.type === 'message:new' && e.message.authorId !== meId && !stick.current) setUnseen(true);
         }
       }),
-    [subscribe, id, meId, loadLatest],
+    [subscribe, id, meId, loadLatest, loadPins, hasNewer],
   );
 
   // authors of loaded messages may not be in the directory (people who left)
@@ -123,7 +203,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    if (prependFrom.current !== null) {
+    if (pendingJump.current !== null) {
+      const target = el.querySelector<HTMLElement>(`[data-seq="${pendingJump.current}"]`);
+      if (target) {
+        target.scrollIntoView({ block: 'center' });
+        setHighlightSeq(pendingJump.current);
+        pendingJump.current = null;
+      }
+    } else if (prependFrom.current !== null) {
       el.scrollTop += el.scrollHeight - prependFrom.current; // keep the reader's place after older messages appear
       prependFrom.current = null;
     } else if (stick.current || messages[messages.length - 1]?.authorId === meId) {
@@ -132,6 +219,13 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       setUnseen(false);
     }
   }, [messages, meId]);
+
+  // the emphasis around a message fades after a moment
+  useEffect(() => {
+    if (highlightSeq === null) return;
+    const t = setTimeout(() => setHighlightSeq(null), 2500);
+    return () => clearTimeout(t);
+  }, [highlightSeq]);
 
   function onScroll() {
     const el = scroller.current;
@@ -186,6 +280,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         setMessages((prev) => applyChange(prev, updated));
         setEditing(null);
       } else {
+        if (hasNewer) goLatest(); // writing from the middle of history: show the conversation's end first
         const created = await api<MessageDto>(`/chats/${id}/messages`, { method: 'POST', body: { body, mentionIds, ...(attachmentIds.length ? { attachmentIds } : {}), ...(replyTo ? { replyToId: replyTo.id } : {}) } });
         setMessages((prev) => merge(prev, [created]));
         setReplyTo(null);
@@ -196,6 +291,36 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       return false; // the draft stays in the box
     } finally {
       setBusy(false);
+    }
+  }
+
+  const iAmOwner = chat?.members.find((m) => m.userId === meId)?.role === 'OWNER';
+  const canPin = chat?.type === 'DIRECT' || iAmOwner;
+  const isPinned = (m: MessageDto) => pins.some((p) => p.id === m.id);
+
+  async function togglePin(m: MessageDto) {
+    setError(undefined);
+    try {
+      if (isPinned(m)) {
+        await api(`/chats/${id}/pins/${m.id}`, { method: 'DELETE' });
+        loadPins();
+      } else {
+        setPins(await api<MessageDto[]>(`/chats/${id}/pins`, { method: 'POST', body: { messageId: m.id } }));
+        setPinIndex(0);
+      }
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
+  /** Scrolls to a message that is already on the page, otherwise opens the conversation around it. */
+  function jumpTo(m: MessageDto) {
+    const el = scroller.current?.querySelector<HTMLElement>(`[data-seq="${m.seq}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setHighlightSeq(m.seq);
+    } else {
+      router.push(`/chats/${id}?m=${m.seq}`);
     }
   }
 
@@ -243,6 +368,28 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         </button>
       </header>
 
+      {pins.length > 0 && (
+        <button
+          type="button"
+          data-testid="pin-bar"
+          onClick={() => {
+            const pin = pins[pinIndex % pins.length];
+            setPinIndex((i) => (i + 1) % pins.length); // tapping again moves to the next pinned message
+            jumpTo(pin);
+          }}
+          className="flex min-h-11 w-full items-center gap-2 border-b border-slate-200 bg-white px-3 text-left text-sm hover:bg-slate-50"
+        >
+          <span aria-hidden="true">📌</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-medium text-teal-800">
+              {t('chats.pinned')}
+              {pins.length > 1 ? ` ${(pinIndex % pins.length) + 1}/${pins.length}` : ''}
+            </span>
+            <span className="block truncate text-slate-700">{pins[pinIndex % pins.length].body || (pins[pinIndex % pins.length].attachments[0] ? `📎 ${pins[pinIndex % pins.length].attachments[0].name}` : '')}</span>
+          </span>
+        </button>
+      )}
+
       {!connected && (
         <div role="status" className="bg-amber-100 px-3 py-1 text-center text-xs text-amber-900">
           {t('chats.connecting')}
@@ -276,6 +423,10 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 mentionNames={mentionNames}
                 replyAuthorName={m.replyTo ? nameOf(m.replyTo.authorId) : undefined}
                 readState={readState(m)}
+                highlighted={highlightSeq === m.seq}
+                canPin={canPin}
+                pinned={isPinned(m)}
+                onTogglePin={() => togglePin(m)}
                 onReply={() => { setEditing(null); setReplyTo(m); }}
                 onEdit={() => { setReplyTo(null); setEditing(m); }}
                 onDelete={() => remove(m)}
@@ -283,6 +434,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             </div>
           );
         })}
+        {hasNewer && (
+          <div className="flex flex-wrap justify-center gap-2 py-2">
+            <button type="button" onClick={loadNewer} className="min-h-9 rounded-full bg-white px-4 text-xs text-teal-800 shadow-sm hover:bg-slate-100">
+              {t('chats.loadNewer')}
+            </button>
+            <button type="button" onClick={goLatest} className="min-h-9 rounded-full bg-teal-700 px-4 text-xs text-white shadow-sm hover:bg-teal-800">
+              {t('chats.toLatest')}
+            </button>
+          </div>
+        )}
       </div>
 
       {unseen && (

@@ -101,3 +101,31 @@ export function mentionQueryAt(beforeCaret: string): string | null {
 export function completeMention(beforeCaret: string, name: string): string {
   return beforeCaret.replace(MENTION_AT_END, (_, lead: string) => `${lead}@${name} `);
 }
+
+export type Mark = { text: string; hit: boolean };
+
+/** Splits text around every case-insensitive occurrence of the search term, for highlighting. */
+export function highlight(text: string, term: string): Mark[] {
+  const t = term.trim();
+  if (!t) return [{ text, hit: false }];
+  const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const out: Mark[] = [];
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    if (m[0].length === 0) continue;
+    if (m.index > last) out.push({ text: text.slice(last, m.index), hit: false });
+    out.push({ text: m[0], hit: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), hit: false });
+  return out.length ? out : [{ text, hit: false }];
+}
+
+/** A short piece of the message around the first hit, so long messages stay readable in a result list. */
+export function snippet(text: string, term: string, radius = 40): string {
+  const i = text.toLowerCase().indexOf(term.trim().toLowerCase());
+  if (i < 0 || text.length <= radius * 2 + term.length) return text;
+  const start = Math.max(i - radius, 0);
+  const end = Math.min(i + term.length + radius, text.length);
+  return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
+}

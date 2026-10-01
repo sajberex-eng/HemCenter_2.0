@@ -68,10 +68,11 @@ export class ChatsController {
   }
 
   @Get(':id/messages')
-  listMessages(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request, @Query('before') before?: string, @Query('around') around?: string, @Query('limit') limit?: string) {
+  listMessages(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request, @Query('before') before?: string, @Query('around') around?: string, @Query('after') after?: string, @Query('limit') limit?: string) {
     return this.messages.list(id, uid(req), {
       before: int(before),
       around: int(around),
+      after: int(after),
       limit: int(limit),
     });
   }

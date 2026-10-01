@@ -196,6 +196,24 @@ describe('jumping to a hit (messages around a number)', () => {
     expect(latest.body.hasNewer).toBe(false);
   });
 
+  it('scrolls forward page by page from a hit until the newest message', async () => {
+    const anna = await person('anna');
+    const boris = await person('boris');
+    const chat = await direct(anna, boris);
+    for (let i = 1; i <= 120; i++) await say(anna, chat, `m${i}`);
+
+    const win = await http().get(`/api/chats/${chat}/messages?around=10`).set(bearer(boris.token));
+    expect(win.body.messages.at(-1).seq).toBe(35);
+    expect(win.body.hasNewer).toBe(true);
+
+    const p1 = await http().get(`/api/chats/${chat}/messages?after=35`).set(bearer(boris.token));
+    expect(p1.body.messages.map((m: { seq: number }) => m.seq)).toEqual(Array.from({ length: 50 }, (_, i) => 36 + i));
+    expect(p1.body.hasNewer).toBe(true);
+    const p2 = await http().get(`/api/chats/${chat}/messages?after=85`).set(bearer(boris.token));
+    expect(p2.body.messages.at(-1).seq).toBe(120);
+    expect(p2.body.hasNewer).toBe(false);
+  });
+
   it('is only for members, and junk numbers do not crash', async () => {
     const anna = await person('anna');
     const boris = await person('boris');
@@ -203,7 +221,7 @@ describe('jumping to a hit (messages around a number)', () => {
     const chat = await direct(anna, boris);
     await say(anna, chat, 'hi');
     expect((await http().get(`/api/chats/${chat}/messages?around=1`).set(bearer(carl.token))).status).toBe(404);
-    for (const q of ['around=abc', 'before=abc', 'limit=-5', 'around=-1']) {
+    for (const q of ['around=abc', 'before=abc', 'after=abc', 'limit=-5', 'around=-1']) {
       expect((await http().get(`/api/chats/${chat}/messages?${q}`).set(bearer(boris.token))).status, q).toBe(200);
     }
   });
