@@ -9,6 +9,8 @@ HemCenter 2.0 is a communication and project-office system for the administrativ
 - `docs/TZ.md` is the source of truth for requirements (acceptance scenarios are labelled `П-x.x.x`); `docs/research.md` explains the decisions; `docs/roadmap.md` lists the stages.
 - **Stage 1 is implemented**: login, roles, invitations, org structure, audit log, TOTP two-factor auth, kk/ru UI, installable PWA shell. Messenger, projects and documents are not started.
 
+- **Open decisions live in `docs/decisions-needed.md`.** Append there whenever something only the owner can decide comes up; do not block on it. Proceed with a documented default and say so.
+
 ## Commands
 
 pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` compiles to `dist/` and must be built before the apps: `pnpm --filter @hemcenter/shared build`.
