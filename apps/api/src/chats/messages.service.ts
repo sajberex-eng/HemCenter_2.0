@@ -27,6 +27,12 @@ export class MessagesService {
    */
   async list(chatId: string, userId: string, opts: { before?: number; after?: number; around?: number; limit?: number } = {}) {
     const { chat } = await this.chats.requireMember(chatId, userId);
+    return this.page(chat, opts);
+  }
+
+  /** The paging itself, with no access check: callers (members, or the audited management view) decide who may read. */
+  async page(chat: { id: string; lastSeq: number }, opts: { before?: number; after?: number; around?: number; limit?: number } = {}) {
+    const chatId = chat.id;
     if (opts.around !== undefined) {
       const lower = Math.max(opts.around - AROUND_WINDOW, 1);
       const upper = opts.around + AROUND_WINDOW;

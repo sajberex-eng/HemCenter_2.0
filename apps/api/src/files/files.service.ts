@@ -82,6 +82,14 @@ export class FilesService implements OnModuleInit, OnModuleDestroy {
     return { attachment: a, stream: this.storage.open(a.storageKey) };
   }
 
+  /** For the audited management view only: no membership check, but unsent or deleted files stay hidden. */
+  async openForOversight(id: string) {
+    const a = await this.prisma.attachment.findUnique({ where: { id } });
+    if (!a || a.deletedAt || !a.messageId) throw new NotFoundException('ATTACHMENT_NOT_FOUND');
+    if (!(await this.storage.exists(a.storageKey))) throw new NotFoundException('ATTACHMENT_NOT_FOUND');
+    return { attachment: a, stream: this.storage.open(a.storageKey) };
+  }
+
   /** The uploader withdraws a file that has not been sent yet. */
   async discard(id: string, userId: string, ip?: string) {
     const a = await this.prisma.attachment.findUnique({ where: { id } });
