@@ -1,7 +1,7 @@
 import type { UserDto } from '@hemcenter/shared';
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string) {
+  constructor(public status: number, public code: string, public details: string[] = []) {
     super(code);
   }
 }
@@ -21,15 +21,17 @@ interface AuthResult {
 
 async function parseError(res: Response): Promise<ApiError> {
   let code = 'GENERIC';
+  let details: string[] = [];
   try {
     const body = await res.json();
     if (typeof body.message === 'string') code = body.message;
+    if (Array.isArray(body.details)) details = body.details.filter((x: unknown) => typeof x === 'string');
   } catch {
     /* non-JSON body */
   }
   if (res.status === 429) code = 'TOO_MANY';
   if (res.status === 413) code = 'FILE_TOO_LARGE';
-  return new ApiError(res.status, code);
+  return new ApiError(res.status, code, details);
 }
 
 /** Exchanges the httpOnly refresh cookie for a new access token. Concurrent callers share one request. */

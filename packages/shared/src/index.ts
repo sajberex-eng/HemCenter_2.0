@@ -197,3 +197,59 @@ export interface AttachmentDto {
   size: number;
   isImage: boolean;
 }
+
+// ---- Documents -------------------------------------------------------------
+
+export const DOCUMENT_STATUSES = ['DRAFT', 'IN_REVIEW', 'RETURNED', 'APPROVED', 'SIGNED', 'REGISTERED'] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+/** The statuses in which the author may still edit the text. */
+export const EDITABLE_DOCUMENT_STATUSES: readonly DocumentStatus[] = ['DRAFT', 'RETURNED'];
+
+/** What goes into the template fields of a document. Every part is optional; a template uses what it needs. */
+export interface DocData {
+  preamble?: string;
+  body?: string;
+  recipient?: string;
+  signer?: string;
+  chair?: string;
+  secretary?: string;
+  participants?: string[];
+  agenda?: string[];
+  decisions?: string[];
+  items?: { text: string; responsible?: string; due?: string }[];
+}
+
+export interface DocumentKindDto {
+  id: string;
+  code: string | null;
+  nameRu: string;
+  nameKk: string;
+  prefix: string;
+  isActive: boolean;
+}
+
+export interface DocumentTemplateDto {
+  id: string;
+  kindId: string;
+  lang: Locale;
+  version: number;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface DocumentDto {
+  id: string;
+  kindId: string;
+  title: string;
+  lang: Locale;
+  data: DocData;
+  status: DocumentStatus;
+  docDate: string;
+  authorId: string;
+  registrationNumber: string | null;
+  registeredAt: string | null;
+  pdfSha256: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -52,6 +52,15 @@ enum DecisionAnswer {
   ACKNOWLEDGED
 }
 
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  RETURNED
+  APPROVED
+  SIGNED
+  REGISTERED
+}
+
 enum Locale {
   ru
   kk
@@ -126,6 +135,8 @@ model User {
   decisionAnswers    DecisionResponse[]
   projectsLed        Project[]          @relation("ProjectManager")
   projectsCurated    Project[]          @relation("ProjectCurator")
+  documents          Document[]         @relation("DocumentAuthor")
+  templatesUploaded  DocumentTemplate[]
 }
 
 model Session {
@@ -413,4 +424,79 @@ model DecisionResponse {
   at         DateTime       @default(now())
 
   @@id([decisionId, userId])
+}
+
+// ---- Documents (stage 4) -----------------------------------------------------------------------------------------
+
+// A kind of document the centre issues (protocol, order, memo...). Maintained by the secretary.
+model DocumentKind {
+  id        String             @id @default(uuid())
+  // Stable machine name for the built-in kinds (PROTOCOL, ORDER, MEMO, DIRECTIVE); null for ones the secretary adds.
+  code      String?            @unique
+  nameRu    String
+  nameKk    String
+  // Letters in the registration number, e.g. "ПР" gives "12-ПР/2026".
+  prefix    String
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  templates DocumentTemplate[]
+  documents Document[]
+  counters  RegistryCounter[]
+}
+
+// The last number given in a journal in a year. Locked while a number is handed out, so numbers never repeat.
+model RegistryCounter {
+  kindId String
+  kind   DocumentKind @relation(fields: [kindId], references: [id])
+  year   Int
+  last   Int          @default(0)
+
+  @@id([kindId, year])
+}
+
+// A Word file with {fields}. A new upload is a new version; the highest active version of a kind and language is used.
+model DocumentTemplate {
+  id           String       @id @default(uuid())
+  kindId       String
+  kind         DocumentKind @relation(fields: [kindId], references: [id])
+  lang         Locale
+  version      Int
+  name         String
+  fileKey      String
+  sha256       String
+  isActive     Boolean      @default(true)
+  uploadedById String?
+  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime     @default(now())
+  documents    Document[]
+
+  @@unique([kindId, lang, version])
+}
+
+model Document {
+  id                 String            @id @default(uuid())
+  kindId             String
+  kind               DocumentKind      @relation(fields: [kindId], references: [id])
+  templateId         String?
+  template           DocumentTemplate? @relation(fields: [templateId], references: [id])
+  title              String
+  lang               Locale
+  // What goes into the template fields (preamble, items, participants...). Validated in the service.
+  data               Json
+  status             DocumentStatus    @default(DRAFT)
+  docDate            DateTime          @db.Date
+  authorId           String
+  author             User              @relation("DocumentAuthor", fields: [authorId], references: [id])
+  registrationNumber String?
+  registeredAt       DateTime?
+  // Generated files. Cleared whenever the content changes; a registered document keeps its PDF and the PDF's hash.
+  docxKey            String?
+  pdfKey             String?
+  pdfSha256          String?
+  renderedAt         DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([authorId])
+  @@index([status])
 }

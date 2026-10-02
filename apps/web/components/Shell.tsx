@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { href: '/projects', label: 'nav.projects' },
   { href: '/tasks', label: 'nav.tasks' },
   { href: '/workload', label: 'nav.workload', projectRoles: true },
+  { href: '/documents', label: 'nav.documents' },
   { href: '/staff', label: 'nav.staff' },
   { href: '/admin/users', label: 'nav.users', admin: true },
   { href: '/admin/org', label: 'nav.org', admin: true },

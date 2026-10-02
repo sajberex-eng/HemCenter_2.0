@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/setup';
 import { hashPassword } from '../src/common/password';
+import { KindsTemplatesService } from '../src/documents/kinds-templates.service';
 
 export const prisma = new PrismaClient();
 export const PASSWORD = 'Str0ng-password-1';
@@ -21,8 +22,11 @@ export async function createApp(): Promise<INestApplication> {
 
 export async function resetDb() {
   // AuditLog is append-only by trigger, so it is cleared with TRUNCATE (not covered by the row trigger).
-  await prisma.$executeRawUnsafe('TRUNCATE "AuditLog", "Invitation", "Session", "Message", "ChatMember", "Chat", "User", "Department", "Position" RESTART IDENTITY CASCADE');
+  await prisma.$executeRawUnsafe('TRUNCATE "AuditLog", "Invitation", "Session", "Message", "ChatMember", "Chat", "User", "Department", "Position", "DocumentKind" RESTART IDENTITY CASCADE');
 }
+
+/** resetDb empties the document kinds too; this puts the built-in kinds and templates back. */
+export const seedDocuments = (app: INestApplication) => app.get(KindsTemplatesService).ensureDefaults();
 
 export async function makeUser(login: string, roles: ('ADMIN' | 'EMPLOYEE' | 'MANAGEMENT' | 'SECRETARY' | 'PROJECT_MANAGER')[] = ['EMPLOYEE']) {
   return prisma.user.create({

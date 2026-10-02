@@ -1,10 +1,8 @@
-import { Transform, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
+import { Trim } from '../common/trim';
 import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { DECISION_ANSWERS, PROJECT_STATUSES, TASK_STATUSES, TEXT_MAX_LENGTH, TITLE_MAX_LENGTH } from '@hemcenter/shared';
 import type { DecisionAnswer, ProjectStatus, TaskStatus } from '@hemcenter/shared';
-
-/** Surrounding blanks are dropped before validation, so a name of spaces fails MinLength. */
-const Trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

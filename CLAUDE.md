@@ -40,6 +40,13 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 - Tasks and decisions travel inside `MessageDto` (`tasks`, `decision`) and are refreshed to the chat with the existing `message:updated` event (`MessagesService.broadcastUpdate`). One decision per message. Decision status is derived: any objection → OBJECTIONS; everyone answered → CONFIRMED; else PENDING. Objection needs a comment.
 - Workload counts PLANNED and ACTIVE projects only; above 100% is flagged. Dates are calendar dates (`@db.Date`), "today" is taken in `APP_TIMEZONE`. DTO class fields exist with value `undefined`, so inspect values, not `Object.keys`.
 
+## Documents (stage 4)
+
+- Code: `apps/api/src/documents/`. Kinds (`DocumentKind`: protocol, order, memo, directive built in; the secretary adds more) and templates (`DocumentTemplate`, versioned per kind and language, Word files on the `FileStorage` disk) are created by `KindsTemplatesService.ensureDefaults()` at start-up (tests call `seedDocuments(app)` after `resetDb`). Built-in templates are generated in code (`default-templates.ts`, `docx-builder.ts`) because the centre gave no samples.
+- Filling is docxtemplater core + pizzip (`render.ts`): values are text, never markup; a template must fill cleanly with full sample data or the upload is refused (`TEMPLATE_INVALID` with `details`). Fields: `org title number date author preamble body recipient signer chair secretary`, lists `participants agenda decisions items approvals` (with `n`), switches `hasX`.
+- PDF: `PdfConverter` is Gotenberg when `GOTENBERG_URL` is set, otherwise local LibreOffice (`soffice`, needs the **libreoffice-writer** package; `libreoffice-core` alone fails with "source file could not be loaded"). The PDF is made on first download, cached by key, and its SHA-256 is stored; editing the text clears both files. Not verified here: Gotenberg in Docker, and the look of the PDF (only that fonts embed and the text is there).
+- Visibility of a document: author, SECRETARY, ADMIN, MANAGEMENT. Anyone can draft; only the author edits, and only in DRAFT/RETURNED.
+
 ## Core domain idea
 
 "A chat that documents are born from." Any chat message can become one of:
