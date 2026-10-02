@@ -219,3 +219,68 @@ describe('audit log', () => {
     await expect(prisma.auditLog.updateMany({ data: { action: 'x' } })).rejects.toThrow(/append-only/);
   });
 });
+
+describe('audit log screen', () => {
+  async function setup() {
+    const admin = await makeUser('root', ['ADMIN']);
+    const token = (await loginAs(app, 'root')).body.accessToken as string;
+    return { admin, token };
+  }
+
+  it('shows who did what and when, but never the private content kept in the log', async () => {
+    const { token } = await setup();
+    const anna = await makeUser('anna');
+    const boris = await makeUser('boris');
+    const a = (await loginAs(app, 'anna')).body.accessToken;
+    const chat = (await http().post('/api/chats/direct').set(bearer(a)).send({ userId: boris.id })).body;
+    const msg = (await http().post(`/api/chats/${chat.id}/messages`).set(bearer(a)).send({ body: 'СЕКРЕТНЫЙ ПЕРВЫЙ ТЕКСТ' })).body;
+    await http().patch(`/api/chats/${chat.id}/messages/${msg.id}`).set(bearer(a)).send({ body: 'Исправленный текст' }).expect(200);
+    // the text really is kept in the database, for a legal request ...
+    const kept = await prisma.auditLog.findFirstOrThrow({ where: { action: 'message.edited' } });
+    expect(JSON.stringify(kept.data)).toContain('СЕКРЕТНЫЙ ПЕРВЫЙ ТЕКСТ');
+    // ... but the administrator's screen and export do not carry it
+    const list = await http().get('/api/audit?action=message.').set(bearer(token));
+    expect(list.status).toBe(200);
+    expect(list.body.map((r: { action: string }) => r.action)).toEqual(['message.edited']);
+    expect(JSON.stringify(list.body)).not.toContain('СЕКРЕТНЫЙ');
+    expect(Object.keys(list.body[0]).sort()).toEqual(['action', 'actorId', 'at', 'entityId', 'entityType', 'id', 'ip']);
+    const csv = await http().get('/api/audit/export?action=message.').set(bearer(token));
+    expect(csv.text).not.toContain('СЕКРЕТНЫЙ');
+    void anna;
+  });
+
+  it('filters by person, kind of action and dates, and exports a safe CSV', async () => {
+    const { token } = await setup();
+    const anna = await makeUser('anna');
+    await loginAs(app, 'anna');
+    await http().post('/api/positions').set(bearer(token)).send({ nameRu: 'Юрист', nameKk: 'Заңгер' }).expect(201);
+    const byActor = await http().get(`/api/audit?actorId=${anna.id}`).set(bearer(token));
+    expect(byActor.body.every((r: { actorId: string }) => r.actorId === anna.id)).toBe(true);
+    expect(byActor.body.length).toBeGreaterThan(0);
+    expect((await http().get('/api/audit?action=position.').set(bearer(token))).body.map((r: { action: string }) => r.action)).toEqual(['position.created']);
+    const today = new Date().toISOString().slice(0, 10);
+    expect((await http().get(`/api/audit?from=${today}&to=${today}`).set(bearer(token))).body.length).toBeGreaterThan(0); // "to" includes the whole day
+    expect((await http().get('/api/audit?from=2001-01-01&to=2001-01-02').set(bearer(token))).body).toEqual([]);
+    expect((await http().get('/api/audit?from=вчера').set(bearer(token))).status).toBe(400);
+
+    const csv = await http().get('/api/audit/export').set(bearer(token));
+    expect(csv.headers['content-type']).toContain('text/csv');
+    expect(csv.headers['content-disposition']).toContain('audit.csv');
+    expect(csv.text.charCodeAt(0)).toBe(0xfeff);
+    expect(csv.text.split('\r\n')[0]).toBe('﻿at,actor,action,entityType,entityId,ip');
+    expect(csv.text).toContain('"position.created"');
+    // the export is for administrators only
+    const a = (await loginAs(app, 'anna')).body.accessToken;
+    expect((await http().get('/api/audit/export').set(bearer(a))).status).toBe(403);
+    expect((await http().get('/api/audit').set(bearer(a))).status).toBe(403);
+  });
+
+  it('a value that would be a spreadsheet formula is neutralised in the CSV', async () => {
+    const { token } = await setup();
+    await prisma.auditLog.create({ data: { action: '=HYPERLINK("http://evil")', entityType: '+cmd', entityId: '@x' } });
+    const csv = (await http().get('/api/audit/export').set(bearer(token))).text;
+    expect(csv).toContain(`"'=HYPERLINK(""http://evil"")"`);
+    expect(csv).toContain(`"'+cmd"`);
+    expect(csv).not.toMatch(/,"=HYPERLINK/);
+  });
+});
