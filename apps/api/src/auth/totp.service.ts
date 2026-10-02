@@ -12,8 +12,11 @@ const PERIOD = 30;
 /** Administrators must use 2FA (TZ 4.2). Read at call time so tests can toggle it. */
 export const requireAdminTotp = () => process.env.REQUIRE_ADMIN_TOTP !== 'false';
 
-export const mfaSetupRequired = (u: Pick<User, 'roles' | 'totpEnabled'>) =>
-  requireAdminTotp() && u.roles.includes('ADMIN') && !u.totpEnabled;
+/** Roles that read other people's data or manage accounts: 2FA is mandatory for them (decided 02.10.2026). */
+export const MFA_MANDATORY_ROLES = ['ADMIN', 'MANAGEMENT'] as const;
+export const mfaMandatory = (u: Pick<User, 'roles'>) => requireAdminTotp() && u.roles.some((r) => (MFA_MANDATORY_ROLES as readonly string[]).includes(r));
+
+export const mfaSetupRequired = (u: Pick<User, 'roles' | 'totpEnabled'>) => mfaMandatory(u) && !u.totpEnabled;
 
 const makeTotp = (secret: Secret | string, label: string) =>
   new TOTP({
@@ -48,7 +51,7 @@ export class TotpService {
   }
 
   async disable(user: User, password: string, ip?: string) {
-    if (requireAdminTotp() && user.roles.includes('ADMIN')) throw new ForbiddenException('MFA_REQUIRED_FOR_ADMIN');
+    if (mfaMandatory(user)) throw new ForbiddenException('MFA_REQUIRED_FOR_ADMIN');
     if (!(await verifyPassword(user.passwordHash, password))) throw new UnauthorizedException('INVALID_CREDENTIALS');
     await this.clear(user.id);
     await this.audit.log({ actorId: user.id, action: 'auth.totp_disabled', ip });

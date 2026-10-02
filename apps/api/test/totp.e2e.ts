@@ -156,6 +156,23 @@ describe('mandatory 2FA for administrators', () => {
     expect((await http().get('/api/auth/me').set(bearer(token))).body.mfaSetupRequired).toBe(false);
   });
 
+  it('management is held to the same rule: no chat reading before enrolment, and 2FA cannot be switched off', async () => {
+    process.env.REQUIRE_ADMIN_TOTP = 'true';
+    await makeUser('director', ['MANAGEMENT']);
+    const token = (await loginAs(app, 'director')).body.accessToken;
+    expect((await http().get('/api/auth/me').set(bearer(token))).body.mfaSetupRequired).toBe(true);
+    const blocked = await http().get('/api/oversight/chats').set(bearer(token));
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.message).toBe('MFA_SETUP_REQUIRED');
+    expect(await prisma.auditLog.count({ where: { action: { startsWith: 'oversight.' } } })).toBe(0);
+
+    const setup = await http().post('/api/auth/totp/setup').set(bearer(token)).expect(200);
+    await http().post('/api/auth/totp/enable').set(bearer(token)).send({ code: codeFor(setup.body.secret) }).expect(200);
+    expect((await http().get('/api/oversight/chats').set(bearer(token))).status).toBe(200);
+    const off = await http().post('/api/auth/totp/disable').set(bearer(token)).send({ password: PASSWORD });
+    expect(off.status).toBe(403);
+  });
+
   it('an administrator cannot switch 2FA off', async () => {
     process.env.REQUIRE_ADMIN_TOTP = 'true';
     await makeUser('root', ['ADMIN']);

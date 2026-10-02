@@ -15,8 +15,8 @@ export class RolesGuard implements CanActivate {
     if (!required?.length) return true;
     const user = ctx.switchToHttp().getRequest().user as { roles: Role[]; totpEnabled: boolean } | undefined;
     if (!user || !user.roles.some((r) => required.includes(r))) throw new ForbiddenException('FORBIDDEN');
-    // An administrator without 2FA is locked out of admin endpoints until they enrol (TZ 4.2).
-    if (required.includes('ADMIN') && mfaSetupRequired(user)) throw new ForbiddenException('MFA_SETUP_REQUIRED');
+    // An administrator or manager without 2FA is locked out of privileged endpoints until they enrol (TZ 4.2).
+    if ((required.includes('ADMIN') || required.includes('MANAGEMENT')) && mfaSetupRequired(user)) throw new ForbiddenException('MFA_SETUP_REQUIRED');
     return true;
   }
 }
