@@ -11,6 +11,13 @@ DOMAIN="${1:?usage: scripts/deploy.sh <domain> [admin-email]}"
 EMAIL="${2:-admin@$DOMAIN}"
 DC="sudo docker compose -f infra/docker-compose.yml --env-file infra/.env"
 
+# Small servers (2 GB RAM): add swap so that building Next.js / NestJS and LibreOffice (PDF) do not get killed
+if [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" -lt 3500 ] && [ "$(swapon --show --noheadings | wc -l)" -eq 0 ]; then
+  echo "== Low memory: creating 4 GB swap file /swapfile"
+  sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   echo "== Installing Docker"
   curl -fsSL https://get.docker.com | sudo sh
@@ -47,7 +54,10 @@ fi
 mkdir -p infra/backups
 
 echo "== Building and starting (first build takes several minutes)"
-$DC up -d --build db gotenberg api web caddy
+# one image at a time: parallel builds need more memory than a 2 GB server has
+export COMPOSE_PARALLEL_LIMIT=1
+$DC build api web
+$DC up -d db gotenberg api web caddy
 
 if ! grep -q '^VAPID_PUBLIC_KEY=.\+' infra/.env; then
   echo "== Generating Web Push keys"
