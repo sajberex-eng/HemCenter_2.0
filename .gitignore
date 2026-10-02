@@ -12,3 +12,4 @@ playwright-report
 infra/.env
 infra/backup.pass
 infra/backups/
+.demo/
