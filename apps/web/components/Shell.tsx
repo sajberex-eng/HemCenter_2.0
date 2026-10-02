@@ -28,6 +28,7 @@ const NAV: NavItem[] = [
   { href: '/projects', label: 'nav.projects' },
   { href: '/tasks', label: 'nav.tasks' },
   { href: '/workload', label: 'nav.workload', projectRoles: true },
+  { href: '/meetings', label: 'nav.meetings' },
   { href: '/documents', label: 'nav.documents', badge: 'docs' },
   { href: '/staff', label: 'nav.staff' },
   { href: '/admin/users', label: 'nav.users', admin: true },

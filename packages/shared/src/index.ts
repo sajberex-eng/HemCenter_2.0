@@ -294,3 +294,48 @@ export interface DocumentDto {
   createdAt: string;
   updatedAt: string;
 }
+
+// ---- Meetings --------------------------------------------------------------
+
+export const MEETING_STATUSES = ['PLANNED', 'HELD', 'CANCELED'] as const;
+export type MeetingStatus = (typeof MEETING_STATUSES)[number];
+export const RESOLUTION_KINDS = ['DECISION', 'INSTRUCTION'] as const;
+export type ResolutionKind = (typeof RESOLUTION_KINDS)[number];
+
+export interface MeetingResolutionDto {
+  id: string;
+  kind: ResolutionKind;
+  text: string;
+  responsibleId: string | null;
+  due: string | null;
+  decisionId: string | null;
+}
+
+export interface MeetingItemDto {
+  id: string;
+  position: number;
+  title: string;
+  heard: string | null;
+  resolutions: MeetingResolutionDto[];
+}
+
+export interface MeetingDto {
+  id: string;
+  subject: string;
+  startsAt: string;
+  place: string | null;
+  projectId: string | null;
+  chatId: string;
+  chairId: string;
+  secretaryId: string;
+  createdById: string;
+  status: MeetingStatus;
+  participantIds: string[];
+  items: MeetingItemDto[];
+  /** Decisions made from messages of the meeting chat, which can be taken into the protocol. */
+  chatDecisions: { id: string; text: string; status: DecisionStatus }[];
+  protocolId: string | null;
+  protocolStatus: DocumentStatus | null;
+  /** The viewer may change the agenda and the record. */
+  canEdit: boolean;
+}

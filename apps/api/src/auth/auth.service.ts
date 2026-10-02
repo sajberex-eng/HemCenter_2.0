@@ -120,13 +120,14 @@ export class AuthService {
   /**
    * Rotating refresh token: the presented token is revoked and a new one is issued.
    * A browser can lose the new cookie (a reload cancels the response while the server has already rotated)
-   * or two tabs can present the same cookie at once. A token rotated less than REFRESH_GRACE_MS ago is therefore
-   * still honoured; a replay after that suggests theft and burns every session of the user.
+   * or two tabs can present the same cookie at once. A token ROTATED less than REFRESH_GRACE_MS ago is therefore
+   * still honoured. A token closed by logout or revocation never is, and a replay after the window suggests theft
+   * and burns every session of the user.
    */
   async refresh(token: string | undefined, meta: { ip?: string; userAgent?: string }) {
     if (!token) throw new UnauthorizedException('UNAUTHORIZED');
     const session = await this.prisma.session.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
-    const inGrace = !!session?.revokedAt && Date.now() - session.revokedAt.getTime() < REFRESH_GRACE_MS;
+    const inGrace = !!session?.rotatedAt && Date.now() - session.rotatedAt.getTime() < REFRESH_GRACE_MS;
     if (!session || (session.revokedAt && !inGrace) || session.expiresAt < new Date() || !session.user.isActive) {
       if (session && session.revokedAt && !inGrace) {
         await this.revokeAll(session.userId);
@@ -134,7 +135,10 @@ export class AuthService {
       }
       throw new UnauthorizedException('UNAUTHORIZED');
     }
-    if (!session.revokedAt) await this.prisma.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (!session.revokedAt) {
+      const now = new Date();
+      await this.prisma.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: now, rotatedAt: now } });
+    }
     return { user: session.user, tokens: await this.issueTokens(session.user, meta) };
   }
 
@@ -148,6 +152,8 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } }),
       this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+      // tokens rotated a moment ago must not come back to life after a revocation
+      this.prisma.session.updateMany({ where: { userId, rotatedAt: { not: null } }, data: { rotatedAt: null } }),
     ]);
     this.realtime.disconnectUser(userId);
   }

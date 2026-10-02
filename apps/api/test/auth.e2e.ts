@@ -65,7 +65,7 @@ describe('auth', () => {
     expect(race.status).toBe(200);
 
     // later it is a replay of a stolen token: every session is burned
-    await prisma.session.updateMany({ where: { userId: user!.id, revokedAt: { not: null } }, data: { revokedAt: new Date(Date.now() - 60_000) } });
+    await prisma.session.updateMany({ where: { userId: user!.id, revokedAt: { not: null } }, data: { revokedAt: new Date(Date.now() - 60_000), rotatedAt: new Date(Date.now() - 60_000) } });
     const replay = await http().post('/api/auth/refresh').set('Cookie', oldCookie);
     expect(replay.status).toBe(401);
     expect(replay.body.message).toBe('UNAUTHORIZED');
@@ -79,6 +79,24 @@ describe('auth', () => {
     expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
     const user = await prisma.user.findUnique({ where: { login: 'anna' } });
     expect(await prisma.session.count({ where: { userId: user!.id, revokedAt: null } })).toBe(3);
+  });
+
+  it('a cookie closed by logout does not work again, not even right away', async () => {
+    await makeUser('anna');
+    const cookie = (await loginAs(app, 'anna')).headers['set-cookie'];
+    await http().post('/api/auth/logout').set('Cookie', cookie).expect(204);
+    expect((await http().post('/api/auth/refresh').set('Cookie', cookie)).status).toBe(401);
+  });
+
+  it('a token rotated a moment ago stops working once the user logs out everywhere', async () => {
+    await makeUser('anna');
+    const login = await loginAs(app, 'anna');
+    const old = login.headers['set-cookie'];
+    const rotated = await http().post('/api/auth/refresh').set('Cookie', old).expect(200);
+    expect((await http().post('/api/auth/refresh').set('Cookie', old)).status).toBe(200); // the grace window: a lost cookie, a second tab
+    await http().post('/api/auth/logout-all').set(bearer(rotated.body.accessToken)).expect(204);
+    expect((await http().post('/api/auth/refresh').set('Cookie', old)).status).toBe(401);
+    expect((await http().post('/api/auth/refresh').set('Cookie', rotated.headers['set-cookie'])).status).toBe(401);
   });
 
   it('invalidates access tokens after logout-all', async () => {

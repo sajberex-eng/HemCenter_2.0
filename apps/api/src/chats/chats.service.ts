@@ -140,9 +140,9 @@ export class ChatsService {
     return this.get(chat.id, userId);
   }
 
-  /** A project chat's members are the project team: they are changed in the project, not in the chat. */
+  /** The members of a project chat or a meeting chat are the team or the participants: changed there, not in the chat. */
   private async assertNotProjectChat(chatId: string) {
-    if (await this.prisma.project.count({ where: { chatId } })) throw new BadRequestException('PROJECT_CHAT_MANAGED');
+    if ((await this.prisma.project.count({ where: { chatId } })) || (await this.prisma.meeting.count({ where: { chatId } }))) throw new BadRequestException('PROJECT_CHAT_MANAGED');
   }
 
   private requireGroupOwner(chat: { type: string }, me: { role: string }) {

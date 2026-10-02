@@ -75,6 +75,17 @@ enum ApprovalActionKind {
   REGISTER
 }
 
+enum MeetingStatus {
+  PLANNED
+  HELD
+  CANCELED
+}
+
+enum ResolutionKind {
+  DECISION
+  INSTRUCTION
+}
+
 enum Locale {
   ru
   kk
@@ -102,39 +113,39 @@ model Position {
 }
 
 model User {
-  id                 String             @id @default(uuid())
-  login              String             @unique
+  id                 String              @id @default(uuid())
+  login              String              @unique
   passwordHash       String
-  mustChangePassword Boolean            @default(true)
+  mustChangePassword Boolean             @default(true)
   fullName           String
   phone              String?
   email              String?
   roles              Role[]
-  locale             Locale             @default(ru)
+  locale             Locale              @default(ru)
   departmentId       String?
-  department         Department?        @relation(fields: [departmentId], references: [id])
+  department         Department?         @relation(fields: [departmentId], references: [id])
   positionId         String?
-  position           Position?          @relation(fields: [positionId], references: [id])
-  isActive           Boolean            @default(true)
-  failedLogins       Int                @default(0)
+  position           Position?           @relation(fields: [positionId], references: [id])
+  isActive           Boolean             @default(true)
+  failedLogins       Int                 @default(0)
   lockedUntil        DateTime?
-  tokenVersion       Int                @default(0)
+  tokenVersion       Int                 @default(0)
   consentAt          DateTime?
   // Two-factor authentication (TOTP). The secret is stored encrypted (AES-256-GCM).
   totpSecretEnc      String?
-  totpEnabled        Boolean            @default(false)
+  totpEnabled        Boolean             @default(false)
   totpLastStep       Int?
   totpRecoveryHashes String[]
   // Notification preferences (TZ 3.8): manual do-not-disturb and daily quiet hours (local HH:mm).
   // A name from an imported chat that has no account here: it cannot sign in and is never listed in the directory.
-  isExternal         Boolean            @default(false)
+  isExternal         Boolean             @default(false)
   dndUntil           DateTime?
   quietStart         String?
   quietEnd           String?
   pushSubscriptions  PushSubscription[]
   lastLoginAt        DateTime?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   sessions           Session[]
   invitations        Invitation[]
   chatMemberships    ChatMember[]
@@ -143,16 +154,20 @@ model User {
   attachments        Attachment[]
   pinsMade           Pin[]
   projectMemberships ProjectMember[]
-  tasksAssigned      Task[]             @relation("TaskAssignee")
-  tasksCreated       Task[]             @relation("TaskCreator")
+  tasksAssigned      Task[]              @relation("TaskAssignee")
+  tasksCreated       Task[]              @relation("TaskCreator")
   decisionsCreated   Decision[]
   decisionAnswers    DecisionResponse[]
-  projectsLed        Project[]          @relation("ProjectManager")
-  projectsCurated    Project[]          @relation("ProjectCurator")
-  documents          Document[]         @relation("DocumentAuthor")
+  projectsLed        Project[]           @relation("ProjectManager")
+  projectsCurated    Project[]           @relation("ProjectCurator")
+  documents          Document[]          @relation("DocumentAuthor")
   templatesUploaded  DocumentTemplate[]
   approvalSteps      ApprovalStep[]
   approvalActions    ApprovalAction[]
+  meetingsCreated    Meeting[]           @relation("MeetingCreator")
+  meetingsChaired    Meeting[]           @relation("MeetingChair")
+  meetingsKept       Meeting[]           @relation("MeetingSecretary")
+  resolutions        MeetingResolution[]
 }
 
 model Session {
@@ -164,6 +179,8 @@ model Session {
   ip        String?
   expiresAt DateTime
   revokedAt DateTime?
+  // Set only when the token was replaced by a newer one (rotation); a logout or a revocation never sets it.
+  rotatedAt DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId])
@@ -217,6 +234,7 @@ model Chat {
   attachments   Attachment[]
   pins          Pin[]
   project       Project?
+  meeting       Meeting?
   decisions     Decision[]
   tasks         Task[]
 }
@@ -354,6 +372,7 @@ model Project {
   decisions  Decision[]
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
+  meetings   Meeting[]
 }
 
 model ProjectMember {
@@ -411,20 +430,21 @@ model Task {
 }
 
 model Decision {
-  id              String             @id @default(uuid())
+  id              String              @id @default(uuid())
   projectId       String?
-  project         Project?           @relation(fields: [projectId], references: [id])
+  project         Project?            @relation(fields: [projectId], references: [id])
   text            String
   addresseeIds    String[]
   createdById     String
-  createdBy       User               @relation(fields: [createdById], references: [id])
+  createdBy       User                @relation(fields: [createdById], references: [id])
   sourceChatId    String
-  sourceChat      Chat               @relation(fields: [sourceChatId], references: [id])
+  sourceChat      Chat                @relation(fields: [sourceChatId], references: [id])
   // One decision per message.
-  sourceMessageId String?            @unique
-  sourceMessage   Message?           @relation(fields: [sourceMessageId], references: [id])
+  sourceMessageId String?             @unique
+  sourceMessage   Message?            @relation(fields: [sourceMessageId], references: [id])
+  resolutions     MeetingResolution[]
   responses       DecisionResponse[]
-  createdAt       DateTime           @default(now())
+  createdAt       DateTime            @default(now())
 
   @@index([sourceChatId])
 }
@@ -522,6 +542,7 @@ model Document {
   registeredById     String?
   steps              ApprovalStep[]
   actions            ApprovalAction[]
+  meeting            Meeting?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -560,4 +581,64 @@ model ApprovalAction {
   at         DateTime           @default(now())
 
   @@index([documentId, at])
+}
+
+// ---- Meetings and protocols (stage 4) ----------------------------------------------------------------------------
+
+model Meeting {
+  id          String        @id @default(uuid())
+  subject     String
+  startsAt    DateTime
+  place       String?
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id])
+  // The meeting's own chat; its members are the participants.
+  chatId      String        @unique
+  chat        Chat          @relation(fields: [chatId], references: [id])
+  chairId     String
+  chair       User          @relation("MeetingChair", fields: [chairId], references: [id])
+  secretaryId String
+  secretary   User          @relation("MeetingSecretary", fields: [secretaryId], references: [id])
+  createdById String
+  createdBy   User          @relation("MeetingCreator", fields: [createdById], references: [id])
+  status      MeetingStatus @default(PLANNED)
+  // The protocol made from this meeting (a Document of the protocol kind).
+  protocolId  String?       @unique
+  protocol    Document?     @relation(fields: [protocolId], references: [id])
+  items       MeetingItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([startsAt])
+}
+
+// One point of the agenda, with what was heard under it.
+model MeetingItem {
+  id          String              @id @default(uuid())
+  meetingId   String
+  meeting     Meeting             @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  position    Int
+  title       String
+  heard       String?
+  resolutions MeetingResolution[]
+
+  @@index([meetingId, position])
+}
+
+// A decision taken or an instruction given under an agenda point. An instruction has a responsible person and a due date.
+model MeetingResolution {
+  id            String         @id @default(uuid())
+  itemId        String
+  item          MeetingItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  position      Int
+  kind          ResolutionKind
+  text          String
+  responsibleId String?
+  responsible   User?          @relation(fields: [responsibleId], references: [id])
+  due           DateTime?      @db.Date
+  // Set when the text was taken over from a decision confirmed in the meeting chat.
+  decisionId    String?
+  decision      Decision?      @relation(fields: [decisionId], references: [id])
+
+  @@index([itemId, position])
 }
