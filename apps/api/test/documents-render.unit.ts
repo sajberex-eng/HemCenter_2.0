@@ -2,16 +2,8 @@ import PizZip from 'pizzip';
 import { describe, expect, it } from 'vitest';
 import { buildDocx } from '../src/documents/docx-builder';
 import { DEFAULT_KINDS, buildDefaultTemplate } from '../src/documents/default-templates';
+import { docxText } from './docx-text';
 import { buildContext, formatDocDate, NO_NUMBER, renderDocx, TemplateError, validateTemplate } from '../src/documents/render';
-
-/** The visible text of a .docx, paragraphs separated by newlines. */
-export function docxText(buf: Buffer): string {
-  const xml = new PizZip(buf).file('word/document.xml')!.asText();
-  return xml
-    .split('</w:p>')
-    .map((p) => p.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'))
-    .join('\n');
-}
 
 const base = { org: 'Центр', title: 'О тестах', number: null, date: '2026-10-02', author: 'Анна', data: {} };
 

@@ -187,6 +187,8 @@ export interface ServerEvents {
   'chat:updated': { chatId: string };
   /** Pinned messages of a chat changed: clients reload the pins. */
   'chat:pins': { chatId: string };
+  /** A document changed state (sent for approval, approved, returned, registered): clients refresh lists and counters. */
+  'document:updated': { documentId: string };
 }
 
 export interface AttachmentDto {
@@ -238,6 +240,38 @@ export interface DocumentTemplateDto {
   createdAt: string;
 }
 
+export const STEP_STATUSES = ['PENDING', 'APPROVED', 'RETURNED'] as const;
+export type StepStatus = (typeof STEP_STATUSES)[number];
+export const APPROVAL_ACTION_KINDS = ['SUBMIT', 'APPROVE', 'RETURN', 'SCAN', 'REGISTER'] as const;
+export type ApprovalActionKind = (typeof APPROVAL_ACTION_KINDS)[number];
+export const MAX_APPROVERS = 20;
+
+export interface ApprovalStepDto {
+  id: string;
+  approverId: string;
+  /** Steps with the same stage are approved in parallel; stages follow one another. */
+  stage: number;
+  status: StepStatus;
+  decidedAt: string | null;
+  comment: string | null;
+}
+
+export interface ApprovalActionDto {
+  id: string;
+  round: number;
+  actorId: string;
+  kind: ApprovalActionKind;
+  comment: string | null;
+  at: string;
+}
+
+export interface DocumentScanDto {
+  name: string;
+  size: number;
+  sha256: string;
+  uploadedAt: string;
+}
+
 export interface DocumentDto {
   id: string;
   kindId: string;
@@ -250,6 +284,13 @@ export interface DocumentDto {
   registrationNumber: string | null;
   registeredAt: string | null;
   pdfSha256: string | null;
+  round: number;
+  steps: ApprovalStepDto[];
+  /** The approval sheet; filled when a single document is opened, empty in lists. */
+  actions: ApprovalActionDto[];
+  scan: DocumentScanDto | null;
+  /** It is this person's turn to approve or return the document. */
+  awaitingMe: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -13,12 +13,13 @@ import { formFromData, kindName, STATUS_STYLE } from '@/lib/docs';
 import type { Key } from '@/lib/dictionaries';
 import { Button, Card, ErrorText, PageTitle, useErrorText } from '@/components/ui';
 import { DocumentForm } from '@/components/docs/DocumentForm';
+import { Workflow } from '@/components/docs/Workflow';
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, locale } = useI18n();
   const { user } = useAuth();
-  const { nameOf, ensurePeople } = useChats();
+  const { nameOf, ensurePeople, subscribe } = useChats();
   const errorText = useErrorText();
   const [doc, setDoc] = useState<DocumentDto>();
   const [kinds, setKinds] = useState<DocumentKindDto[]>([]);
@@ -36,6 +37,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       setMissing(true);
     }
   }, [id, ensurePeople]);
+
+  // another person's decision arrives while this page is open
+  useEffect(() => subscribe((e) => { if (e.type === 'document:updated' && e.documentId === id) void load(); }), [subscribe, id, load]);
 
   useEffect(() => {
     void load();
@@ -158,6 +162,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           {canEdit && <Button onClick={() => setEditing(true)}>{t('docs.edit')}</Button>}
         </div>
       )}
+      {!editing && <Workflow doc={doc} onChange={setDoc} />}
     </div>
   );
 }

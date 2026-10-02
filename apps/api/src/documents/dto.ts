@@ -57,3 +57,18 @@ export class UploadTemplateDto {
   @IsUUID() kindId: string;
   @IsIn(LOCALES) lang: Locale;
 }
+
+export class RouteItemDto {
+  @IsUUID() approverId: string;
+  @IsOptional() @IsBoolean() parallelWithPrevious?: boolean;
+}
+
+export class SubmitDto {
+  /** Left out when a returned document goes again along its old route. */
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => RouteItemDto) route?: RouteItemDto[];
+  @IsOptional() @IsString() @MaxLength(2000) comment?: string;
+}
+
+export class DecisionCommentDto {
+  @IsOptional() @IsString() @MaxLength(2000) comment?: string;
+}

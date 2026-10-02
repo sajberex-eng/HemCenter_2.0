@@ -18,7 +18,7 @@ export default function DocumentsPage() {
   const { nameOf, ensurePeople } = useChats();
   const [docs, setDocs] = useState<DocumentDto[]>();
   const [kinds, setKinds] = useState<DocumentKindDto[]>([]);
-  const [mine, setMine] = useState(false);
+  const [view, setView] = useState<'all' | 'mine' | 'awaiting'>('all');
   const seesAll = !!user?.roles.some((r) => r === 'SECRETARY' || r === 'ADMIN' || r === 'MANAGEMENT');
   const isSecretary = !!user?.roles.some((r) => r === 'SECRETARY' || r === 'ADMIN');
   const kindById = useMemo(() => new Map(kinds.map((k) => [k.id, k])), [kinds]);
@@ -27,11 +27,11 @@ export default function DocumentsPage() {
     api<DocumentKindDto[]>('/document-kinds?all=1').then(setKinds, () => undefined);
   }, []);
   useEffect(() => {
-    api<DocumentDto[]>(`/documents${mine ? '?mine=1' : ''}`).then((list) => {
+    api<DocumentDto[]>(`/documents${view === 'mine' ? '?mine=1' : view === 'awaiting' ? '?awaiting=1' : ''}`).then((list) => {
       setDocs(list);
       ensurePeople(list.map((d) => d.authorId));
     }, () => setDocs([]));
-  }, [mine, ensurePeople]);
+  }, [view, ensurePeople]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -48,12 +48,13 @@ export default function DocumentsPage() {
           </Link>
         </div>
       </div>
-      {seesAll && (
-        <div role="group" className="flex gap-2 text-sm">
-          <button type="button" aria-pressed={!mine} onClick={() => setMine(false)} className={`min-h-9 rounded-full px-3 ${!mine ? 'bg-teal-700 text-white' : 'bg-slate-100'}`}>{t('docs.all')}</button>
-          <button type="button" aria-pressed={mine} onClick={() => setMine(true)} className={`min-h-9 rounded-full px-3 ${mine ? 'bg-teal-700 text-white' : 'bg-slate-100'}`}>{t('docs.mine')}</button>
-        </div>
-      )}
+      <div role="group" className="flex flex-wrap gap-2 text-sm">
+        {([['all', 'docs.all'], ...(seesAll ? [['mine', 'docs.mine']] : []), ['awaiting', 'docs.awaiting']] as const).map(([v, label]) => (
+          <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v as typeof view)} className={`min-h-9 rounded-full px-3 ${view === v ? 'bg-teal-700 text-white' : 'bg-slate-100'}`}>
+            {t(label as Key)}
+          </button>
+        ))}
+      </div>
       {docs && docs.length === 0 && <p className="text-slate-500">{t('docs.empty')}</p>}
       <div className="space-y-3">
         {docs?.map((d) => {

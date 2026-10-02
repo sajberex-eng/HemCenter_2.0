@@ -5,7 +5,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildDocx } from '../src/documents/docx-builder';
 import { bearer, createApp, loginAs, makeUser, prisma, resetDb, seedDocuments } from './helpers';
-import { docxText } from './documents-render.unit';
+import { docxText } from './docx-text';
 
 let app: INestApplication;
 const http = () => request(app.getHttpServer());

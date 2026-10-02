@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import type { User } from '@prisma/client';
@@ -6,8 +6,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/roles.guard';
 import { contentDisposition } from '../files/file-rules';
 import { DocumentsService } from './documents.service';
+import { ApprovalService } from './approval.service';
+import { RegistryService } from './registry.service';
 import { KindsTemplatesService, MAX_TEMPLATE_BYTES } from './kinds-templates.service';
-import { CreateDocumentDto, CreateKindDto, UpdateDocumentDto, UpdateKindDto, UploadTemplateDto } from './dto';
+import { CreateDocumentDto, CreateKindDto, DecisionCommentDto, SubmitDto, UpdateDocumentDto, UpdateKindDto, UploadTemplateDto } from './dto';
+import { maxUploadBytes } from '../files/file-rules';
 
 const me = (req: Request) => req.user as User;
 const isSecretary = (u: User) => u.roles.includes('SECRETARY') || u.roles.includes('ADMIN');
@@ -15,7 +18,12 @@ const isSecretary = (u: User) => u.roles.includes('SECRETARY') || u.roles.includ
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DocumentsController {
-  constructor(private readonly documents: DocumentsService, private readonly kinds: KindsTemplatesService) {}
+  constructor(
+    private readonly documents: DocumentsService,
+    private readonly kinds: KindsTemplatesService,
+    private readonly approval: ApprovalService,
+    private readonly registry: RegistryService,
+  ) {}
 
   // ---- kinds & templates (the secretary's directory) ----
   @Get('document-kinds')
@@ -67,8 +75,13 @@ export class DocumentsController {
   }
 
   @Get('documents')
-  list(@Req() req: Request, @Query('status') status?: string, @Query('kindId') kindId?: string, @Query('mine') mine?: string) {
-    return this.documents.list(me(req), { status, kindId: kindId && /^[0-9a-f-]{36}$/.test(kindId) ? kindId : undefined, mine: mine === '1' });
+  list(@Req() req: Request, @Query('status') status?: string, @Query('kindId') kindId?: string, @Query('mine') mine?: string, @Query('awaiting') awaiting?: string) {
+    return this.documents.list(me(req), { status, kindId: kindId && /^[0-9a-f-]{36}$/.test(kindId) ? kindId : undefined, mine: mine === '1', awaiting: awaiting === '1' });
+  }
+
+  @Get('documents/awaiting-count')
+  async awaitingCount(@Req() req: Request) {
+    return { count: await this.documents.awaitingCount(me(req)) };
   }
 
   @Get('documents/:id')
@@ -86,5 +99,44 @@ export class DocumentsController {
     const { stream, name, mime } = await this.documents.file(id, me(req), format === 'pdf' ? 'pdf' : 'docx');
     res.set({ 'Content-Type': mime, 'Content-Disposition': contentDisposition('attachment', name), 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
     return new StreamableFile(stream);
+  }
+
+  // ---- approval, scan, registration ----
+  @Post('documents/:id/submit')
+  @HttpCode(200)
+  submit(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SubmitDto, @Req() req: Request) {
+    return this.approval.submit(me(req), id, dto.route, dto.comment, req.ip);
+  }
+
+  @Post('documents/:id/approve')
+  @HttpCode(200)
+  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DecisionCommentDto, @Req() req: Request) {
+    return this.approval.approve(me(req), id, dto.comment, req.ip);
+  }
+
+  @Post('documents/:id/return')
+  @HttpCode(200)
+  returnIt(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DecisionCommentDto, @Req() req: Request) {
+    return this.approval.return(me(req), id, dto.comment, req.ip);
+  }
+
+  @Post('documents/:id/scan')
+  @HttpCode(200)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: maxUploadBytes(), files: 1 } }))
+  uploadScan(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File | undefined, @Req() req: Request) {
+    return this.registry.uploadScan(me(req), id, file, req.ip);
+  }
+
+  @Get('documents/:id/scan')
+  async scan(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { stream, name, mime } = await this.registry.openScan(me(req), id);
+    res.set({ 'Content-Type': mime, 'Content-Disposition': contentDisposition('attachment', name), 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'private, no-store' });
+    return new StreamableFile(stream);
+  }
+
+  @Post('documents/:id/register')
+  @HttpCode(200)
+  register(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return this.registry.register(me(req), id, req.ip);
   }
 }

@@ -61,6 +61,20 @@ enum DocumentStatus {
   REGISTERED
 }
 
+enum StepStatus {
+  PENDING
+  APPROVED
+  RETURNED
+}
+
+enum ApprovalActionKind {
+  SUBMIT
+  APPROVE
+  RETURN
+  SCAN
+  REGISTER
+}
+
 enum Locale {
   ru
   kk
@@ -137,6 +151,8 @@ model User {
   projectsCurated    Project[]          @relation("ProjectCurator")
   documents          Document[]         @relation("DocumentAuthor")
   templatesUploaded  DocumentTemplate[]
+  approvalSteps      ApprovalStep[]
+  approvalActions    ApprovalAction[]
 }
 
 model Session {
@@ -494,9 +510,54 @@ model Document {
   pdfKey             String?
   pdfSha256          String?
   renderedAt         DateTime?
+  // How many times it was sent for approval; steps are reset on each round and the history stays in ApprovalAction.
+  round              Int               @default(0)
+  // The signed paper copy, scanned.
+  scanKey            String?
+  scanName           String?
+  scanMime           String?
+  scanSize           Int?
+  scanSha256         String?
+  scanAt             DateTime?
+  registeredById     String?
+  steps              ApprovalStep[]
+  actions            ApprovalAction[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  // A number is never given twice within a kind; documents without a number do not clash (NULLs are distinct).
+  @@unique([kindId, registrationNumber])
   @@index([authorId])
   @@index([status])
+}
+
+// One approver in the route. Steps with the same stage are approved in parallel; stages go one after another.
+model ApprovalStep {
+  id         String     @id @default(uuid())
+  documentId String
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  approverId String
+  approver   User       @relation(fields: [approverId], references: [id])
+  stage      Int
+  status     StepStatus @default(PENDING)
+  decidedAt  DateTime?
+  comment    String?
+
+  @@unique([documentId, approverId])
+  @@index([approverId, status])
+}
+
+// The approval sheet: everything that happened, in order. Never edited.
+model ApprovalAction {
+  id         String             @id @default(uuid())
+  documentId String
+  document   Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  round      Int
+  actorId    String
+  actor      User               @relation(fields: [actorId], references: [id])
+  kind       ApprovalActionKind
+  comment    String?
+  at         DateTime           @default(now())
+
+  @@index([documentId, at])
 }

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useChats } from '@/lib/chats';
+import { useAwaitingDocs } from '@/lib/awaiting';
 import { useI18n } from '@/lib/i18n';
 import { canCreateProjects } from '@/lib/work';
 import type { Key } from '@/lib/dictionaries';
@@ -18,16 +19,16 @@ interface NavItem {
   admin?: boolean;
   management?: boolean;
   projectRoles?: boolean;
-  badge?: boolean;
+  badge?: 'chats' | 'docs';
 }
 
 const NAV: NavItem[] = [
   { href: '/', label: 'nav.home' },
-  { href: '/chats', label: 'nav.chats', badge: true },
+  { href: '/chats', label: 'nav.chats', badge: 'chats' },
   { href: '/projects', label: 'nav.projects' },
   { href: '/tasks', label: 'nav.tasks' },
   { href: '/workload', label: 'nav.workload', projectRoles: true },
-  { href: '/documents', label: 'nav.documents' },
+  { href: '/documents', label: 'nav.documents', badge: 'docs' },
   { href: '/staff', label: 'nav.staff' },
   { href: '/admin/users', label: 'nav.users', admin: true },
   { href: '/admin/org', label: 'nav.org', admin: true },
@@ -41,6 +42,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const { user, ready, isAdmin, isManagement, logout } = useAuth();
   const { t } = useI18n();
   const { totalUnread } = useChats();
+  const awaitingDocs = useAwaitingDocs();
+  const badgeFor = (i: NavItem) => (i.badge === 'chats' ? totalUnread : i.badge === 'docs' ? awaitingDocs : 0);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -76,7 +79,7 @@ export function Shell({ children }: { children: ReactNode }) {
               className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${active(i.href) ? 'bg-teal-50 font-medium text-teal-800' : 'text-slate-700 hover:bg-slate-100'}`}
             >
               {t(i.label)}
-              {i.badge && totalUnread > 0 && <Badge n={totalUnread} />}
+              {badgeFor(i) > 0 && <Badge n={badgeFor(i)} />}
             </Link>
           ))}
         </nav>
@@ -110,7 +113,7 @@ export function Shell({ children }: { children: ReactNode }) {
               className={`min-h-14 flex-1 whitespace-nowrap px-3 py-4 text-center text-xs ${active(i.href) ? 'font-semibold text-teal-800' : 'text-slate-600'}`}
             >
               {t(i.label)}
-              {i.badge && totalUnread > 0 && <Badge n={totalUnread} />}
+              {badgeFor(i) > 0 && <Badge n={badgeFor(i)} />}
             </Link>
           ))}
         </nav>

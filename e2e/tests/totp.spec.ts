@@ -33,6 +33,7 @@ test('employee enrols 2FA, then signs in with an authenticator code and with a r
 
   await page.getByLabel('Введите код из приложения, чтобы подтвердить').fill(codeAt(secret));
   await page.getByRole('button', { name: 'Подтвердить' }).click();
+  await expect(page.getByTestId('recovery-codes').locator('li')).toHaveCount(10); // wait for the server before reading them
   const codes = await page.getByTestId('recovery-codes').locator('li').allInnerTexts();
   expect(codes).toHaveLength(10);
   await page.getByRole('button', { name: 'Я сохранил(а) коды' }).click();
