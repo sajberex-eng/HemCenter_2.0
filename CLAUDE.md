@@ -52,7 +52,13 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 
 - Code: `apps/api/src/meetings/` (pure `meeting-rules.ts` builds the protocol text), UI `apps/web/app/(app)/meetings`. A meeting owns a GROUP chat (like a project); participants = chat members, changed only through the meeting (`PROJECT_CHAT_MANAGED` also covers meeting chats). Agenda `MeetingItem` (+ "heard" text) with `MeetingResolution`s: DECISION (text, may be taken over from a decision made in the meeting chat) or INSTRUCTION (responsible participant + due date both required).
 - Editing: creator, chair, meeting secretary, ADMIN. Seeing: participants plus SECRETARY/ADMIN/MANAGEMENT. `makeProtocol` creates (or refreshes) one protocol `Document` per meeting (`Meeting.protocolId`), which then follows the ordinary approval/registration flow; once it is IN_REVIEW or later the record is locked (`PROTOCOL_LOCKED`), after a return it opens again.
-- Not yet done (stage 4d): registering a protocol should create the instructions as tracked assignments; today they are only in the protocol text.
+
+## Execution control (stage 4d)
+
+- Code: `apps/api/src/assignments/` (rules in `assignment-rules.ts`), `notifications/`; UI `apps/web/app/(app)/{assignments,notifications}`. `Assignment` = text, one responsible (+ co-responsible), a controller, due date (`originalDue` kept when moved). Status NEW → IN_PROGRESS → REVIEW (report sent) → DONE (accepted) or RETURNED (needs a comment) or REMOVED (reason). **Overdue is derived** (still with the responsible person and due before today), a report waiting for the controller is not late. Every transition locks the row (`FOR UPDATE`) and writes `AssignmentEvent` (history) + audit.
+- Where assignments come from: registering a document (`RegistryService.register` → `AssignmentsService.createForDocument` inside the same transaction: every `DocData.items` entry with `responsibleId` and `due`; controller = the meeting's chair for a protocol, else the document's author; idempotent per `(document, item index)`); by hand (ADMIN, MANAGEMENT, PROJECT_MANAGER, SECRETARY); from a chat message (same roles, responsible must be in the chat).
+- Reports carry up to 5 files (`ReportFile` on `FileStorage`, same blocked-extension rules). Due-date change = request with a reason, one pending at a time, decided by the controller.
+- Notifications: `Notification` rows (type + assignment id only, no text of the work) + realtime `notification:new` + generic push (`PushService.notifyEvent`, texts in `PUSH_TEXT`). Reminders (`ReminderScheduler`, hourly; off with `DISABLE_SCHEDULER=true`, tests set it): 3 days, 1 day, the day, then daily when late (the controller also hears of late ones), at most once per kind per day (`ReminderLog`). Head's overview: `GET /assignments/summary` (ADMIN/MANAGEMENT).
 
 ## Core domain idea
 

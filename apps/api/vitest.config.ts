@@ -19,6 +19,7 @@ export default defineConfig({
       VAPID_PUBLIC_KEY: vapid.publicKey,
       VAPID_PRIVATE_KEY: vapid.privateKey,
       DISABLE_THROTTLE: 'true',
+      DISABLE_SCHEDULER: 'true',
       FILES_DIR: path.join(os.tmpdir(), 'hemcenter-test-files'),
       // existing admin tests run without 2FA; test/totp.e2e.ts turns the requirement on explicitly
       REQUIRE_ADMIN_TOTP: 'false',

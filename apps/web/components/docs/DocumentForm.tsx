@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { LOCALES, type DocumentKindDto, type Locale } from '@hemcenter/shared';
 import { useI18n } from '@/lib/i18n';
+import { useChats } from '@/lib/chats';
 import { dataFromForm, fieldsOf, kindName, type DocField, type DocForm } from '@/lib/docs';
 import type { Key } from '@/lib/dictionaries';
 import { Button, ErrorText, Field, Input, Select } from '../ui';
@@ -39,7 +40,9 @@ export function DocumentForm({ kinds, initial, lockKind, submitLabel, error, bus
   onSubmit: (v: { kindId: string; lang: Locale; title: string; docDate: string; data: ReturnType<typeof dataFromForm> }) => void;
 }) {
   const { t, locale } = useI18n();
+  const { people } = useChats();
   const [v, setV] = useState(initial);
+  const colleagues = Object.values(people).filter((p) => p.isActive).sort((a, b) => a.fullName.localeCompare(b.fullName));
   const kind = kinds.find((k) => k.id === v.kindId);
   const fields = fieldsOf(kind);
   const set = <K extends keyof DocForm>(k: K, value: DocForm[K]) => setV({ ...v, form: { ...v.form, [k]: value } });
@@ -89,7 +92,17 @@ export function DocumentForm({ kinds, initial, lockKind, submitLabel, error, bus
               <Input aria-label={t('docs.itemText')} placeholder={t('docs.itemText')} maxLength={2000} value={it.text} onChange={(e) => set('items', v.form.items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
               <div className="flex flex-wrap gap-2">
                 <div className="min-w-40 flex-1">
-                  <Input aria-label={t('docs.itemResponsible')} placeholder={t('docs.itemResponsible')} maxLength={200} value={it.responsible} onChange={(e) => set('items', v.form.items.map((x, j) => (j === i ? { ...x, responsible: e.target.value } : x)))} />
+                  <Select
+                    aria-label={t('docs.itemResponsible')}
+                    value={it.responsibleId}
+                    onChange={(e) => {
+                      const person = colleagues.find((c) => c.id === e.target.value);
+                      set('items', v.form.items.map((x, j) => (j === i ? { ...x, responsibleId: e.target.value, responsible: person?.fullName ?? '' } : x)));
+                    }}
+                  >
+                    <option value="">{it.responsible && !it.responsibleId ? it.responsible : t('docs.itemResponsible')}</option>
+                    {colleagues.map((c) => <option key={c.id} value={c.id}>{c.fullName}</option>)}
+                  </Select>
                 </div>
                 <Input type="date" aria-label={t('docs.itemDue')} value={it.due} onChange={(e) => set('items', v.form.items.map((x, j) => (j === i ? { ...x, due: e.target.value } : x)))} className="w-44" />
                 <button type="button" className="min-h-11 rounded px-2 text-sm text-red-700 hover:bg-red-50" onClick={() => set('items', v.form.items.filter((_, j) => j !== i))}>
@@ -98,7 +111,7 @@ export function DocumentForm({ kinds, initial, lockKind, submitLabel, error, bus
               </div>
             </div>
           ))}
-          <Button type="button" variant="secondary" onClick={() => set('items', [...v.form.items, { text: '', responsible: '', due: '' }])}>
+          <Button type="button" variant="secondary" onClick={() => set('items', [...v.form.items, { text: '', responsible: '', responsibleId: '', due: '' }])}>
             {t('docs.addItem')}
           </Button>
         </fieldset>

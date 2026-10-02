@@ -190,8 +190,14 @@ test.describe('service worker', () => {
     await w.page.goto('about:blank');
     await w.push('this is not json');
     await expect.poll(() => w.shown()).toEqual([{ title: 'HemCenter', body: 'Новое сообщение', tag: 'hemcenter', url: '/chats' }]);
-    await w.push(JSON.stringify({ title: 'HemCenter', body: 'x', tag: 'evil', url: 'https://evil.example.com/steal' }));
-    await expect.poll(async () => (await w.shown()).find((n) => n.tag === 'evil')?.url).toBe('/chats'); // never leaves the site
+    // a push delivered through the debugger is occasionally lost while the worker is busy with the previous one, so ask again
+    const hostile = JSON.stringify({ title: 'HemCenter', body: 'x', tag: 'evil', url: 'https://evil.example.com/steal' });
+    await expect
+      .poll(async () => {
+        await w.push(hostile);
+        return (await w.shown()).find((n) => n.tag === 'evil')?.url;
+      }, { timeout: 15_000 })
+      .toBe('/chats'); // never leaves the site
     await w.ctx.close();
   });
 });

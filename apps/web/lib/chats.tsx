@@ -15,6 +15,7 @@ export type ChatEvent =
   | { type: 'chat:updated'; chatId: string }
   | { type: 'chat:pins'; chatId: string }
   | { type: 'document:updated'; documentId: string }
+  | { type: 'notification:new' }
   | { type: 'resync' };
 
 export interface Toast {
@@ -195,6 +196,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     });
     on('chat:pins', (e) => emit({ type: 'chat:pins', chatId: e.chatId }));
     on('document:updated', (e) => emit({ type: 'document:updated', documentId: e.documentId }));
+    on('notification:new', () => emit({ type: 'notification:new' }));
     on('chat:updated', (e) => {
       reload().catch(() => undefined);
       emit({ type: 'chat:updated', chatId: e.chatId });

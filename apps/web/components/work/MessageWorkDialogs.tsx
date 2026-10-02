@@ -118,3 +118,48 @@ export function DecisionDialog({ chatId, message, candidates, onClose }: { chatI
     </Modal>
   );
 }
+
+/** Gives a formal assignment from a message: responsible person (a participant of the chat), a date, the giver controls it. */
+export function AssignmentDialog({ chatId, message, candidates, onClose }: { chatId: string; message: MessageDto; candidates: Candidate[]; onClose: () => void }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
+  const [text, setText] = useState(firstLine(message.body));
+  const [responsibleId, setResponsibleId] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api(`/chats/${chatId}/messages/${message.id}/assignment`, { method: 'POST', body: { text, responsibleId, dueDate } });
+      onClose();
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={t('asg.give')} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <ErrorText>{error}</ErrorText>
+        <Field label={t('asg.text')}>
+          <Input required maxLength={2000} aria-label={t('asg.text')} value={text} onChange={(e) => setText(e.target.value)} />
+        </Field>
+        <Field label={t('asg.responsible')}>
+          <Select aria-label={t('asg.responsible')} value={responsibleId} onChange={(e) => setResponsibleId(e.target.value)}>
+            <option value="">{t('asg.pickPerson')}</option>
+            {candidates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </Field>
+        <Field label={t('asg.due')}>
+          <Input type="date" required aria-label={t('asg.due')} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </Field>
+        <Button type="submit" disabled={busy || !text.trim() || !responsibleId || !dueDate}>{t('create')}</Button>
+      </form>
+    </Modal>
+  );
+}

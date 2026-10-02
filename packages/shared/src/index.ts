@@ -189,6 +189,8 @@ export interface ServerEvents {
   'chat:pins': { chatId: string };
   /** A document changed state (sent for approval, approved, returned, registered): clients refresh lists and counters. */
   'document:updated': { documentId: string };
+  /** A new line in the person's notification list. */
+  'notification:new': { id: string; type: NotificationType; assignmentId: string | null; createdAt: string };
 }
 
 export interface AttachmentDto {
@@ -218,7 +220,7 @@ export interface DocData {
   participants?: string[];
   agenda?: string[];
   decisions?: string[];
-  items?: { text: string; responsible?: string; due?: string }[];
+  items?: { text: string; responsible?: string; responsibleId?: string; due?: string }[];
 }
 
 export interface DocumentKindDto {
@@ -338,4 +340,91 @@ export interface MeetingDto {
   protocolStatus: DocumentStatus | null;
   /** The viewer may change the agenda and the record. */
   canEdit: boolean;
+}
+
+// ---- Execution control -----------------------------------------------------
+
+export const ASSIGNMENT_STATUSES = ['NEW', 'IN_PROGRESS', 'REVIEW', 'DONE', 'RETURNED', 'REMOVED'] as const;
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
+export type AssignmentSource = 'DOCUMENT' | 'CHAT' | 'MANUAL';
+export type ReportStatus = 'PENDING' | 'ACCEPTED' | 'RETURNED';
+export type DueChangeStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type AssignmentEventKind = 'CREATED' | 'STARTED' | 'REPORT' | 'ACCEPTED' | 'RETURNED' | 'DUE_REQUESTED' | 'DUE_APPROVED' | 'DUE_REJECTED' | 'REMOVED';
+
+export const NOTIFICATION_TYPES = [
+  'ASSIGNED', 'REPORT_SUBMITTED', 'REPORT_ACCEPTED', 'REPORT_RETURNED', 'DUE_REQUESTED', 'DUE_APPROVED', 'DUE_REJECTED', 'REMOVED',
+  'REMIND_D3', 'REMIND_D1', 'REMIND_D0', 'REMIND_OVERDUE',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface NotificationDto {
+  id: string;
+  type: NotificationType;
+  assignmentId: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface ReportFileDto {
+  id: string;
+  name: string;
+  size: number;
+}
+
+export interface ExecutionReportDto {
+  id: string;
+  authorId: string;
+  text: string;
+  status: ReportStatus;
+  reviewerId: string | null;
+  reviewComment: string | null;
+  reviewedAt: string | null;
+  files: ReportFileDto[];
+  createdAt: string;
+}
+
+export interface DueChangeDto {
+  id: string;
+  requestedById: string;
+  oldDue: string;
+  newDue: string;
+  reason: string;
+  status: DueChangeStatus;
+  decidedById: string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface AssignmentEventDto {
+  id: string;
+  actorId: string;
+  kind: AssignmentEventKind;
+  comment: string | null;
+  at: string;
+}
+
+export interface AssignmentDto {
+  id: string;
+  text: string;
+  responsibleId: string;
+  coResponsibleIds: string[];
+  controllerId: string;
+  dueDate: string;
+  originalDue: string;
+  status: AssignmentStatus;
+  overdue: boolean;
+  doneAt: string | null;
+  removedReason: string | null;
+  sourceKind: AssignmentSource;
+  sourceDocumentId: string | null;
+  sourceChatId: string | null;
+  createdById: string;
+  createdAt: string;
+  /** Filled when one assignment is opened; empty in lists. */
+  reports: ExecutionReportDto[];
+  dueChanges: DueChangeDto[];
+  events: AssignmentEventDto[];
+  /** What the viewer may do right now. */
+  can: { start: boolean; report: boolean; review: boolean; requestDue: boolean; decideDue: boolean; remove: boolean };
 }

@@ -86,6 +86,45 @@ enum ResolutionKind {
   INSTRUCTION
 }
 
+enum AssignmentStatus {
+  NEW
+  IN_PROGRESS
+  REVIEW
+  DONE
+  RETURNED
+  REMOVED
+}
+
+enum AssignmentSource {
+  DOCUMENT
+  CHAT
+  MANUAL
+}
+
+enum ReportStatus {
+  PENDING
+  ACCEPTED
+  RETURNED
+}
+
+enum DueChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AssignmentEventKind {
+  CREATED
+  STARTED
+  REPORT
+  ACCEPTED
+  RETURNED
+  DUE_REQUESTED
+  DUE_APPROVED
+  DUE_REJECTED
+  REMOVED
+}
+
 enum Locale {
   ru
   kk
@@ -113,61 +152,70 @@ model Position {
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  login              String              @unique
-  passwordHash       String
-  mustChangePassword Boolean             @default(true)
-  fullName           String
-  phone              String?
-  email              String?
-  roles              Role[]
-  locale             Locale              @default(ru)
-  departmentId       String?
-  department         Department?         @relation(fields: [departmentId], references: [id])
-  positionId         String?
-  position           Position?           @relation(fields: [positionId], references: [id])
-  isActive           Boolean             @default(true)
-  failedLogins       Int                 @default(0)
-  lockedUntil        DateTime?
-  tokenVersion       Int                 @default(0)
-  consentAt          DateTime?
+  id                    String              @id @default(uuid())
+  login                 String              @unique
+  passwordHash          String
+  mustChangePassword    Boolean             @default(true)
+  fullName              String
+  phone                 String?
+  email                 String?
+  roles                 Role[]
+  locale                Locale              @default(ru)
+  departmentId          String?
+  department            Department?         @relation(fields: [departmentId], references: [id])
+  positionId            String?
+  position              Position?           @relation(fields: [positionId], references: [id])
+  isActive              Boolean             @default(true)
+  failedLogins          Int                 @default(0)
+  lockedUntil           DateTime?
+  tokenVersion          Int                 @default(0)
+  consentAt             DateTime?
   // Two-factor authentication (TOTP). The secret is stored encrypted (AES-256-GCM).
-  totpSecretEnc      String?
-  totpEnabled        Boolean             @default(false)
-  totpLastStep       Int?
-  totpRecoveryHashes String[]
+  totpSecretEnc         String?
+  totpEnabled           Boolean             @default(false)
+  totpLastStep          Int?
+  totpRecoveryHashes    String[]
   // Notification preferences (TZ 3.8): manual do-not-disturb and daily quiet hours (local HH:mm).
   // A name from an imported chat that has no account here: it cannot sign in and is never listed in the directory.
-  isExternal         Boolean             @default(false)
-  dndUntil           DateTime?
-  quietStart         String?
-  quietEnd           String?
-  pushSubscriptions  PushSubscription[]
-  lastLoginAt        DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  sessions           Session[]
-  invitations        Invitation[]
-  chatMemberships    ChatMember[]
-  messages           Message[]
-  chatsCreated       Chat[]
-  attachments        Attachment[]
-  pinsMade           Pin[]
-  projectMemberships ProjectMember[]
-  tasksAssigned      Task[]              @relation("TaskAssignee")
-  tasksCreated       Task[]              @relation("TaskCreator")
-  decisionsCreated   Decision[]
-  decisionAnswers    DecisionResponse[]
-  projectsLed        Project[]           @relation("ProjectManager")
-  projectsCurated    Project[]           @relation("ProjectCurator")
-  documents          Document[]          @relation("DocumentAuthor")
-  templatesUploaded  DocumentTemplate[]
-  approvalSteps      ApprovalStep[]
-  approvalActions    ApprovalAction[]
-  meetingsCreated    Meeting[]           @relation("MeetingCreator")
-  meetingsChaired    Meeting[]           @relation("MeetingChair")
-  meetingsKept       Meeting[]           @relation("MeetingSecretary")
-  resolutions        MeetingResolution[]
+  isExternal            Boolean             @default(false)
+  dndUntil              DateTime?
+  quietStart            String?
+  quietEnd              String?
+  pushSubscriptions     PushSubscription[]
+  lastLoginAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  sessions              Session[]
+  invitations           Invitation[]
+  chatMemberships       ChatMember[]
+  messages              Message[]
+  chatsCreated          Chat[]
+  attachments           Attachment[]
+  pinsMade              Pin[]
+  projectMemberships    ProjectMember[]
+  tasksAssigned         Task[]              @relation("TaskAssignee")
+  tasksCreated          Task[]              @relation("TaskCreator")
+  decisionsCreated      Decision[]
+  decisionAnswers       DecisionResponse[]
+  projectsLed           Project[]           @relation("ProjectManager")
+  projectsCurated       Project[]           @relation("ProjectCurator")
+  documents             Document[]          @relation("DocumentAuthor")
+  templatesUploaded     DocumentTemplate[]
+  approvalSteps         ApprovalStep[]
+  approvalActions       ApprovalAction[]
+  meetingsCreated       Meeting[]           @relation("MeetingCreator")
+  meetingsChaired       Meeting[]           @relation("MeetingChair")
+  meetingsKept          Meeting[]           @relation("MeetingSecretary")
+  resolutions           MeetingResolution[]
+  assignmentsOwned      Assignment[]        @relation("AssignmentResponsible")
+  assignmentsControlled Assignment[]        @relation("AssignmentController")
+  assignmentsCreated    Assignment[]        @relation("AssignmentCreator")
+  reports               ExecutionReport[]   @relation("ReportAuthor")
+  reportsReviewed       ExecutionReport[]   @relation("ReportReviewer")
+  dueRequests           DueChange[]         @relation("DueRequester")
+  dueDecisions          DueChange[]         @relation("DueDecider")
+  assignmentEvents      AssignmentEvent[]
+  notifications         Notification[]
 }
 
 model Session {
@@ -543,6 +591,7 @@ model Document {
   steps              ApprovalStep[]
   actions            ApprovalAction[]
   meeting            Meeting?
+  assignments        Assignment[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -641,4 +690,129 @@ model MeetingResolution {
   decision      Decision?      @relation(fields: [decisionId], references: [id])
 
   @@index([itemId, position])
+}
+
+// ---- Execution control (stage 4d) --------------------------------------------------------------------------------
+
+// A formal instruction with one responsible person, a controller and a due date.
+model Assignment {
+  id                 String            @id @default(uuid())
+  text               String
+  responsibleId      String
+  responsible        User              @relation("AssignmentResponsible", fields: [responsibleId], references: [id])
+  coResponsibleIds   String[]
+  controllerId       String
+  controller         User              @relation("AssignmentController", fields: [controllerId], references: [id])
+  dueDate            DateTime          @db.Date
+  // The date first given; the current one may have been moved with the controller's consent.
+  originalDue        DateTime          @db.Date
+  // "Overdue" is not stored: it is an open assignment whose due date has passed.
+  status             AssignmentStatus  @default(NEW)
+  doneAt             DateTime?
+  removedReason      String?
+  sourceKind         AssignmentSource
+  sourceDocumentId   String?
+  sourceDocument     Document?         @relation(fields: [sourceDocumentId], references: [id])
+  // The meeting resolution it came from, so registering a protocol twice cannot create it twice.
+  sourceResolutionId String?
+  sourceChatId       String?
+  sourceMessageId    String?
+  createdById        String
+  createdBy          User              @relation("AssignmentCreator", fields: [createdById], references: [id])
+  reports            ExecutionReport[]
+  dueChanges         DueChange[]
+  events             AssignmentEvent[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([sourceDocumentId, sourceResolutionId])
+  @@index([responsibleId, status])
+  @@index([controllerId, status])
+  @@index([dueDate])
+}
+
+model ExecutionReport {
+  id            String       @id @default(uuid())
+  assignmentId  String
+  assignment    Assignment   @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User         @relation("ReportAuthor", fields: [authorId], references: [id])
+  text          String
+  status        ReportStatus @default(PENDING)
+  reviewerId    String?
+  reviewer      User?        @relation("ReportReviewer", fields: [reviewerId], references: [id])
+  reviewComment String?
+  reviewedAt    DateTime?
+  files         ReportFile[]
+  createdAt     DateTime     @default(now())
+
+  @@index([assignmentId, createdAt])
+}
+
+model ReportFile {
+  id         String          @id @default(uuid())
+  reportId   String
+  report     ExecutionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  name       String
+  mime       String
+  size       Int
+  sha256     String
+  storageKey String
+  createdAt  DateTime        @default(now())
+}
+
+// A request to move the due date: needs the controller's consent. The history stays.
+model DueChange {
+  id            String          @id @default(uuid())
+  assignmentId  String
+  assignment    Assignment      @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  requestedById String
+  requestedBy   User            @relation("DueRequester", fields: [requestedById], references: [id])
+  oldDue        DateTime        @db.Date
+  newDue        DateTime        @db.Date
+  reason        String
+  status        DueChangeStatus @default(PENDING)
+  decidedById   String?
+  decidedBy     User?           @relation("DueDecider", fields: [decidedById], references: [id])
+  decisionNote  String?
+  decidedAt     DateTime?
+  createdAt     DateTime        @default(now())
+
+  @@index([assignmentId, status])
+}
+
+// What happened to an assignment, in order. Never edited.
+model AssignmentEvent {
+  id           String              @id @default(uuid())
+  assignmentId String
+  assignment   Assignment          @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  actorId      String
+  actor        User                @relation(fields: [actorId], references: [id])
+  kind         AssignmentEventKind
+  comment      String?
+  at           DateTime            @default(now())
+
+  @@index([assignmentId, at])
+}
+
+// One reminder of a kind per assignment per day, however often the job runs.
+model ReminderLog {
+  assignmentId String
+  kind         String
+  day          DateTime @db.Date
+
+  @@id([assignmentId, kind, day])
+}
+
+// A line in the person's notification list. Carries no text of the work itself, only what happened and where.
+model Notification {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String
+  assignmentId String?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, readAt])
 }

@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useChats } from '@/lib/chats';
 import { useAwaitingDocs } from '@/lib/awaiting';
+import { useNotifications } from '@/lib/notifications';
 import { useI18n } from '@/lib/i18n';
 import { canCreateProjects } from '@/lib/work';
 import type { Key } from '@/lib/dictionaries';
@@ -19,7 +20,7 @@ interface NavItem {
   admin?: boolean;
   management?: boolean;
   projectRoles?: boolean;
-  badge?: 'chats' | 'docs';
+  badge?: 'chats' | 'docs' | 'notifications';
 }
 
 const NAV: NavItem[] = [
@@ -29,6 +30,8 @@ const NAV: NavItem[] = [
   { href: '/tasks', label: 'nav.tasks' },
   { href: '/workload', label: 'nav.workload', projectRoles: true },
   { href: '/meetings', label: 'nav.meetings' },
+  { href: '/assignments', label: 'nav.assignments' },
+  { href: '/notifications', label: 'nav.notifications', badge: 'notifications' },
   { href: '/documents', label: 'nav.documents', badge: 'docs' },
   { href: '/staff', label: 'nav.staff' },
   { href: '/admin/users', label: 'nav.users', admin: true },
@@ -44,7 +47,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const { totalUnread } = useChats();
   const awaitingDocs = useAwaitingDocs();
-  const badgeFor = (i: NavItem) => (i.badge === 'chats' ? totalUnread : i.badge === 'docs' ? awaitingDocs : 0);
+  const { unread: unreadNotifications } = useNotifications();
+  const badgeFor = (i: NavItem) => (i.badge === 'chats' ? totalUnread : i.badge === 'docs' ? awaitingDocs : i.badge === 'notifications' ? unreadNotifications : 0);
   const router = useRouter();
   const pathname = usePathname();
 

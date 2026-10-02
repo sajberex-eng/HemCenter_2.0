@@ -37,7 +37,7 @@ export interface DocForm {
   participants: string;
   agenda: string;
   decisions: string;
-  items: { text: string; responsible: string; due: string }[];
+  items: { text: string; responsible: string; responsibleId: string; due: string }[];
 }
 
 export const emptyForm = (): DocForm => ({ preamble: '', body: '', recipient: '', signer: '', chair: '', secretary: '', participants: '', agenda: '', decisions: '', items: [] });
@@ -52,7 +52,7 @@ export const formFromData = (d: DocData): DocForm => ({
   participants: fromLines(d.participants),
   agenda: fromLines(d.agenda),
   decisions: fromLines(d.decisions),
-  items: (d.items ?? []).map((i) => ({ text: i.text, responsible: i.responsible ?? '', due: i.due ?? '' })),
+  items: (d.items ?? []).map((i) => ({ text: i.text, responsible: i.responsible ?? '', responsibleId: i.responsibleId ?? '', due: i.due ?? '' })),
 });
 
 export function dataFromForm(f: DocForm, fields: DocField[]): DocData {
@@ -61,7 +61,7 @@ export function dataFromForm(f: DocForm, fields: DocField[]): DocData {
   for (const k of ['preamble', 'body', 'recipient', 'signer', 'chair', 'secretary'] as const) if (on(k) && f[k].trim()) out[k] = f[k].trim();
   for (const k of ['participants', 'agenda', 'decisions'] as const) if (on(k) && toLines(f[k]).length) out[k] = toLines(f[k]);
   if (on('items')) {
-    const items = f.items.filter((i) => i.text.trim()).map((i) => ({ text: i.text.trim(), ...(i.responsible.trim() ? { responsible: i.responsible.trim() } : {}), ...(i.due ? { due: i.due } : {}) }));
+    const items = f.items.filter((i) => i.text.trim()).map((i) => ({ text: i.text.trim(), ...(i.responsible.trim() ? { responsible: i.responsible.trim() } : {}), ...(i.responsibleId ? { responsibleId: i.responsibleId } : {}), ...(i.due ? { due: i.due } : {}) }));
     if (items.length) out.items = items;
   }
   return out;

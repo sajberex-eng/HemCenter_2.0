@@ -8,6 +8,8 @@ import { FileStorage } from '../files/file-storage';
 import { maxUploadBytes, repairFileNameEncoding, sanitizeFileName, sniffImage } from '../files/file-rules';
 import { todayIn } from '../projects/project-rules';
 import { DocumentsService } from './documents.service';
+import { AssignmentsService } from '../assignments/assignments.service';
+import type { Assignment } from '@prisma/client';
 import { lockDocument } from './approval.service';
 import { formatRegistrationNumber } from './approval-rules';
 
@@ -32,6 +34,7 @@ export class RegistryService {
     private readonly realtime: RealtimeService,
     private readonly storage: FileStorage,
     private readonly documents: DocumentsService,
+    private readonly assignments: AssignmentsService,
   ) {}
 
   private async notify(documentId: string) {
@@ -99,10 +102,13 @@ export class RegistryService {
       const number = formatRegistrationNumber(counter.last, cur.kind.prefix, year);
       await tx.document.update({ where: { id }, data: { status: 'REGISTERED', registrationNumber: number, registeredAt: new Date(), registeredById: actor.id } });
       await tx.approvalAction.create({ data: { documentId: id, round: cur.round, actorId: actor.id, kind: 'REGISTER', comment: number } });
-      return { number, old: await this.documents.invalidateFiles(tx, cur) }; // the number goes into the files
+      // the items that name a person and a date become tracked assignments, or the registration does not happen at all
+      const created = await this.assignments.createForDocument(tx, cur, actor);
+      return { number, created, old: await this.documents.invalidateFiles(tx, cur) }; // the number goes into the files
     });
     await this.documents.dropFiles(result.old);
-    await this.audit.log({ actorId: actor.id, action: 'document.registered', entityType: 'Document', entityId: id, data: { number: result.number }, ip });
+    await this.assignments.announce(result.created as Assignment[]);
+    await this.audit.log({ actorId: actor.id, action: 'document.registered', entityType: 'Document', entityId: id, data: { number: result.number, assignments: result.created.length }, ip });
     // fix the final PDF (and its hash) right away; if the converter is down, the first download makes it
     try {
       await this.documents.render(await this.prisma.document.findUniqueOrThrow({ where: { id }, include: { kind: true } }), true);

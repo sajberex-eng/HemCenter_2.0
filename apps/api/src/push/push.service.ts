@@ -3,7 +3,7 @@ import type { MessageDto } from '@hemcenter/shared';
 import { PrismaService } from '../prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { PushSender } from './push-sender';
-import { buildPayload, isAllowedPushEndpoint, parseClock, shouldNotify } from './push-rules';
+import { buildPayload, inQuietHours, isAllowedPushEndpoint, localMinutes, parseClock, shouldNotify } from './push-rules';
 
 const MAX_FAILURES = 5;
 
@@ -87,6 +87,31 @@ export class PushService {
           const ok = shouldNotify({ userId: u.id, notifyMode: modeOf.get(u.id) ?? 'ALL', dndUntil: u.dndUntil, quietStart: u.quietStart, quietEnd: u.quietEnd }, message, now, this.timeZone);
           if (!ok) return [];
           const payload = JSON.stringify(buildPayload(u.locale, author.fullName, message.chatId, message.mentionIds.includes(u.id)));
+          return u.pushSubscriptions.map((s) => this.deliver(s, payload));
+        }),
+      );
+    } catch (e) {
+      this.log.warn(`push failed: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * A push that says only WHAT happened ("a report has arrived"), with a link to open. Used for work events, which are
+   * not tied to a chat. The same do-not-disturb and quiet-hours rules apply. Never throws.
+   */
+  async notifyEvent(userIds: string[], text: { ru: string; kk: string }, url: string, tag: string): Promise<void> {
+    try {
+      if (!this.enabled || userIds.length === 0) return;
+      const now = new Date();
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds }, isActive: true, pushSubscriptions: { some: {} } },
+        select: { id: true, locale: true, dndUntil: true, quietStart: true, quietEnd: true, pushSubscriptions: true },
+      });
+      await Promise.all(
+        users.flatMap((u) => {
+          if (u.dndUntil && u.dndUntil > now) return [];
+          if (inQuietHours(u.quietStart, u.quietEnd, localMinutes(now, this.timeZone))) return [];
+          const payload = JSON.stringify({ title: 'HemCenter', body: text[u.locale], tag, url });
           return u.pushSubscriptions.map((s) => this.deliver(s, payload));
         }),
       );

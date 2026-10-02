@@ -21,13 +21,13 @@ test.describe('documents from templates', () => {
     await a.page.getByLabel('Текст').fill('Прошу согласовать закупку на квартал.');
     await a.page.getByRole('button', { name: 'Добавить поручение' }).click();
     await a.page.getByLabel('Что сделать').fill('Подготовить заявку');
-    await a.page.getByLabel('Ответственный', { exact: true }).fill('Борис');
+    await a.page.getByLabel('Ответственный', { exact: true }).selectOption({ label: boris.fullName });
     await a.page.getByRole('button', { name: 'Создать' }).click();
 
     await expect(a.page).toHaveURL(/\/documents\/[0-9a-f-]{36}$/);
     await expect(a.page.getByTestId('document-status')).toHaveText('Черновик');
     await expect(a.page.getByTestId('document-number')).toHaveText('Номер присваивается при регистрации');
-    await expect(a.page.getByText('Подготовить заявку — Борис')).toBeVisible();
+    await expect(a.page.getByText(`Подготовить заявку — ${boris.fullName}`)).toBeVisible();
 
     const [docx] = await Promise.all([a.page.waitForEvent('download'), a.page.getByRole('button', { name: 'Скачать Word' }).click()]);
     expect(docx.suggestedFilename()).toBe('О закупке канцтоваров.docx');

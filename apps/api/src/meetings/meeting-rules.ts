@@ -8,7 +8,7 @@ export interface ProtocolSource {
   items: {
     title: string;
     heard: string | null;
-    resolutions: { kind: 'DECISION' | 'INSTRUCTION'; text: string; responsible: string | null; due: string | null }[];
+    resolutions: { kind: 'DECISION' | 'INSTRUCTION'; text: string; responsible: string | null; responsibleId?: string | null; due: string | null }[];
   }[];
 }
 
@@ -43,7 +43,7 @@ export function protocolData(src: ProtocolSource, lang: Locale): DocData {
     for (const r of item.resolutions) {
       const text = `${r.text.trim()} (${w.point(k + 1)})`;
       if (r.kind === 'DECISION') decisions.push(text);
-      else items.push({ text, ...(r.responsible ? { responsible: r.responsible } : {}), ...(r.due ? { due: r.due } : {}) });
+      else items.push({ text, ...(r.responsible ? { responsible: r.responsible } : {}), ...(r.responsibleId ? { responsibleId: r.responsibleId } : {}), ...(r.due ? { due: r.due } : {}) });
     }
   });
   if (decisions.length) data.decisions = decisions;

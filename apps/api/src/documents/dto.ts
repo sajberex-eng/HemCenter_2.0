@@ -10,6 +10,8 @@ const PREFIX = /^[\p{L}\p{N}]{1,8}$/u;
 export class DocItemDto {
   @Trim() @IsString() @MinLength(1) @MaxLength(2000) text: string;
   @IsOptional() @IsString() @MaxLength(200) responsible?: string;
+  /** When set (with a date), registering the document makes this item a tracked assignment. */
+  @IsOptional() @IsUUID() responsibleId?: string;
   @IsOptional() @Matches(DATE) due?: string;
 }
 

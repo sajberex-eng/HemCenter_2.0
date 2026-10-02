@@ -28,12 +28,13 @@ interface Props {
   /** Offered only where the chat is writable; the management view passes neither. */
   onTask?: () => void;
   onDecision?: () => void;
+  onAssignment?: () => void;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, readOnly, canPin, pinned, onTogglePin, onTask, onDecision, onReply, onEdit, onDelete }: Props) {
+export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, readOnly, canPin, pinned, onTogglePin, onTask, onDecision, onAssignment, onReply, onEdit, onDelete }: Props) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -127,6 +128,11 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
             {onTask && (
               <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onTask(); }}>
                 {t('tasks.fromMessage')}
+              </button>
+            )}
+            {onAssignment && (
+              <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onAssignment(); }}>
+                {t('asg.give')}
               </button>
             )}
             {onDecision && !message.decision && (

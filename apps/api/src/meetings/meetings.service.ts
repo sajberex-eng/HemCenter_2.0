@@ -306,7 +306,7 @@ export class MeetingsService {
         items: m.items.map((i) => ({
           title: i.title,
           heard: i.heard,
-          resolutions: i.resolutions.map((r) => ({ kind: r.kind, text: r.text, responsible: r.responsibleId ? names.get(r.responsibleId) ?? null : null, due: dateOnly(r.due) })),
+          resolutions: i.resolutions.map((r) => ({ kind: r.kind, text: r.text, responsible: r.responsibleId ? names.get(r.responsibleId) ?? null : null, responsibleId: r.responsibleId, due: dateOnly(r.due) })),
         })),
       },
       dto.lang,
