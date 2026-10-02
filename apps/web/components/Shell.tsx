@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useChats } from '@/lib/chats';
 import { useI18n } from '@/lib/i18n';
+import { canCreateProjects } from '@/lib/work';
 import type { Key } from '@/lib/dictionaries';
 import { LocaleSwitcher } from './ui';
 import { PushPrompt } from './PushPrompt';
@@ -16,12 +17,16 @@ interface NavItem {
   label: Key;
   admin?: boolean;
   management?: boolean;
+  projectRoles?: boolean;
   badge?: boolean;
 }
 
 const NAV: NavItem[] = [
   { href: '/', label: 'nav.home' },
   { href: '/chats', label: 'nav.chats', badge: true },
+  { href: '/projects', label: 'nav.projects' },
+  { href: '/tasks', label: 'nav.tasks' },
+  { href: '/workload', label: 'nav.workload', projectRoles: true },
   { href: '/staff', label: 'nav.staff' },
   { href: '/admin/users', label: 'nav.users', admin: true },
   { href: '/admin/org', label: 'nav.org', admin: true },
@@ -54,7 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   if (!ready || !user || (adminOnly && !isAdmin) || (managementOnly && !isManagement)) return <p className="p-6 text-slate-500">{t('loading')}</p>;
 
-  const items = NAV.filter((i) => (!i.admin || isAdmin) && (!i.management || isManagement));
+  const items = NAV.filter((i) => (!i.admin || isAdmin) && (!i.management || isManagement) && (!i.projectRoles || canCreateProjects(user)));
   const active = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
 
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatDto } from '@hemcenter/shared';
-import { chatTitle, colorFor, completeMention, dayKey, highlight, initials, mentionQueryAt, snippet, tokenize } from './chatUtils';
+import { chatTitle, colorFor, formatDate, completeMention, dayKey, highlight, initials, mentionQueryAt, snippet, tokenize } from './chatUtils';
 
 const kinds = (body: string, names: string[] = []) => tokenize(body, names).map((p) => `${p.kind}:${p.text}`);
 
@@ -131,5 +131,13 @@ describe('snippet', () => {
 
   it('keeps short messages whole', () => {
     expect(snippet('короткий текст', 'текст')).toBe('короткий текст');
+  });
+});
+
+describe('formatDate', () => {
+  it('shows a calendar date as written, whatever the viewer\'s time zone', () => {
+    expect(formatDate('2026-10-02', 'ru')).toBe('02.10.2026');
+    expect(formatDate('2026-01-01', 'ru')).toBe('01.01.2026');
+    expect(formatDate('2026-10-02T00:00:00.000Z', 'ru')).toBe('02.10.2026');
   });
 });

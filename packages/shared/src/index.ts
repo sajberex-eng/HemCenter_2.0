@@ -80,6 +80,52 @@ export interface TaskDto extends TaskCardDto {
   createdAt: string;
 }
 
+export interface MilestoneDto {
+  id: string;
+  title: string;
+  dueDate: string;
+  doneAt: string | null;
+  overdue: boolean;
+}
+
+export interface ProjectMemberDto {
+  userId: string;
+  fullName: string;
+  allocation: number;
+  roleTitle: string | null;
+  /** The person's total over all planned and running projects. */
+  totalLoad: number;
+  overloaded: boolean;
+}
+
+export interface ProjectDto {
+  id: string;
+  name: string;
+  goal: string | null;
+  status: ProjectStatus;
+  startDate: string | null;
+  endDate: string | null;
+  managerId: string;
+  curatorId: string | null;
+  chatId: string;
+  members: ProjectMemberDto[];
+  milestones: MilestoneDto[];
+  createdAt: string;
+}
+
+export interface WorkloadDto {
+  total: number;
+  limit: number;
+  overloaded: boolean;
+  projects: { projectId: string; name: string; status: ProjectStatus; allocation: number; roleTitle: string | null }[];
+}
+
+export interface WorkloadMatrixDto {
+  limit: number;
+  projects: { id: string; name: string; status: ProjectStatus }[];
+  people: { userId: string; fullName: string; total: number; overloaded: boolean; cells: { projectId: string; allocation: number }[] }[];
+}
+
 /** pending: someone has not answered yet; objections: at least one objection; confirmed: everyone answered, none objected. */
 export type DecisionStatus = 'PENDING' | 'OBJECTIONS' | 'CONFIRMED';
 

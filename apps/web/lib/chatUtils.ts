@@ -24,6 +24,10 @@ const intlLocale = (l: Locale) => (l === 'kk' ? 'kk-KZ' : 'ru-RU');
 
 export const formatTime = (iso: string, l: Locale) => new Intl.DateTimeFormat(intlLocale(l), { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 
+/** A calendar date ("YYYY-MM-DD", no time zone) as dd.mm.yyyy; never shifted by the viewer's time zone. */
+export const formatDate = (day: string, l: Locale) =>
+  new Intl.DateTimeFormat(intlLocale(l), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day.slice(0, 10)}T12:00:00Z`));
+
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 /** Short stamp for the chat list: time today, otherwise the date. */

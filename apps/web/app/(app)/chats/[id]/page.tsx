@@ -12,6 +12,7 @@ import { chatTitle, dayKey, formatDayLabel } from '@/lib/chatUtils';
 import { Avatar } from '@/components/chat/Avatar';
 import { ChatInfo } from '@/components/chat/ChatInfo';
 import { Composer } from '@/components/chat/Composer';
+import { DecisionDialog, TaskDialog } from '@/components/work/MessageWorkDialogs';
 import { MessageBubble, type ReadState } from '@/components/chat/MessageBubble';
 import { ErrorText, useErrorText } from '@/components/ui';
 
@@ -295,6 +296,7 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
     }
   }
 
+  const [work, setWork] = useState<{ kind: 'task' | 'decision'; message: MessageDto } | null>(null);
   const iAmOwner = chat?.members.find((m) => m.userId === meId)?.role === 'OWNER';
   const canPin = chat?.type === 'DIRECT' || iAmOwner;
   const isPinned = (m: MessageDto) => pins.some((p) => p.id === m.id);
@@ -434,6 +436,8 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
                 canPin={canPin}
                 pinned={isPinned(m)}
                 onTogglePin={() => togglePin(m)}
+                onTask={readOnly ? undefined : () => setWork({ kind: 'task', message: m })}
+                onDecision={readOnly ? undefined : () => setWork({ kind: 'decision', message: m })}
                 onReply={() => { setEditing(null); setReplyTo(m); }}
                 onEdit={() => { setReplyTo(null); setEditing(m); }}
                 onDelete={() => remove(m)}
@@ -490,6 +494,10 @@ function Conversation({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {infoOpen && chat && <ChatInfo chat={chat} title={title} onClose={() => setInfoOpen(false)} />}
+      {work?.kind === 'task' && chat && (
+        <TaskDialog chatId={id} message={work.message} candidates={chat.members.map((m) => ({ id: m.userId, name: nameOf(m.userId) }))} onClose={() => setWork(null)} />
+      )}
+      {work?.kind === 'decision' && chat && <DecisionDialog chatId={id} message={work.message} candidates={candidates} onClose={() => setWork(null)} />}
     </section>
   );
 }

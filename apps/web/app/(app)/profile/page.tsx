@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import type { Key } from '@/lib/dictionaries';
 import { NotificationsSection } from '@/components/NotificationsSection';
 import { SecuritySection } from '@/components/SecuritySection';
+import { WorkloadSection } from '@/components/WorkloadSection';
 import { Button, Card, ErrorText, Field, Input, PageTitle, useErrorText } from '@/components/ui';
 
 export default function ProfilePage() {
@@ -51,6 +52,7 @@ export default function ProfilePage() {
           {user?.roles.map((r) => <span key={r} className="rounded bg-slate-100 px-2 py-0.5 text-xs">{t(`role.${r}` as Key)}</span>)}
         </div>
       </Card>
+      <WorkloadSection />
       <NotificationsSection />
       <SecuritySection />
       <Card>

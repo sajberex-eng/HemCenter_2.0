@@ -5,6 +5,8 @@ import type { MessageDto } from '@hemcenter/shared';
 import { useI18n } from '@/lib/i18n';
 import { formatTime, tokenize } from '@/lib/chatUtils';
 import { AttachmentView } from './AttachmentView';
+import { DecisionCard } from '../work/DecisionCard';
+import { TaskCard } from '../work/TaskCard';
 
 export type ReadState = { kind: 'direct'; read: boolean } | { kind: 'group'; read: number; total: number };
 
@@ -23,12 +25,15 @@ interface Props {
   canPin?: boolean;
   pinned?: boolean;
   onTogglePin?: () => void;
+  /** Offered only where the chat is writable; the management view passes neither. */
+  onTask?: () => void;
+  onDecision?: () => void;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, readOnly, canPin, pinned, onTogglePin, onReply, onEdit, onDelete }: Props) {
+export function MessageBubble({ message, mine, authorName, mentionNames, replyAuthorName, readState, highlighted, readOnly, canPin, pinned, onTogglePin, onTask, onDecision, onReply, onEdit, onDelete }: Props) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -73,6 +78,10 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
                 ))}
               </div>
             )}
+            {message.decision && <DecisionCard decision={message.decision} readOnly={readOnly} />}
+            {message.tasks.map((task) => (
+              <TaskCard key={task.id} task={task} readOnly={readOnly} />
+            ))}
             {message.body && (
               <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">
                 {tokenize(message.body, mentionNames).map((p, i) =>
@@ -115,6 +124,16 @@ export function MessageBubble({ message, mine, authorName, mentionNames, replyAu
             <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onReply(); }}>
               {t('chats.reply')}
             </button>
+            {onTask && (
+              <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onTask(); }}>
+                {t('tasks.fromMessage')}
+              </button>
+            )}
+            {onDecision && !message.decision && (
+              <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onDecision(); }}>
+                {t('decision.create')}
+              </button>
+            )}
             {canPin && onTogglePin && (
               <button type="button" className="min-h-8 rounded px-2 text-teal-800 hover:bg-black/5" onClick={() => { setOpen(false); onTogglePin(); }}>
                 {pinned ? t('chats.unpin') : t('chats.pin')}

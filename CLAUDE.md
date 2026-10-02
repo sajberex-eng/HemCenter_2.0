@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 HemCenter 2.0 is a communication and project-office system for the administrative staff of a private hematology center in **Kazakhstan**. It replaces WhatsApp groups.
 
 - `docs/TZ.md` is the source of truth for requirements (acceptance scenarios are labelled `П-x.x.x`); `docs/research.md` explains the decisions; `docs/roadmap.md` lists the stages.
-- **Stages 1 and 2 are implemented**: login, roles, invitations, org structure, audit log, TOTP 2FA, kk/ru UI, installable PWA; messenger (direct/group chats, replies, mentions, read ticks, unread counters, real-time over Socket.IO, edit/delete with audit trail, pins), attachments on disk, Web Push + in-app notifications, search, WhatsApp import into read-only archive chats. Projects, tasks, decisions and documents (stages 3-4) are not started.
+- **Stages 1 and 2 are implemented**: login, roles, invitations, org structure, audit log, TOTP 2FA, kk/ru UI, installable PWA; messenger (direct/group chats, replies, mentions, read ticks, unread counters, real-time over Socket.IO, edit/delete with audit trail, pins), attachments on disk, Web Push + in-app notifications, search, WhatsApp import into read-only archive chats. **Stage 3 is implemented**: projects (team with % allocation, milestones, project chat that follows the team), tasks (exactly one responsible person), decisions with confirmation, workload (profile + matrix, >100% flagged). Documents, protocols, orders and execution control (stage 4) are not started.
 
 - **Open decisions live in `docs/decisions-needed.md`.** Append there whenever something only the owner can decide comes up; do not block on it. Proceed with a documented default and say so.
 
@@ -32,6 +32,13 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 - 2FA (TOTP): mandatory for ADMIN and MANAGEMENT (`REQUIRE_ADMIN_TOTP`, default on; admin endpoints return 403 `MFA_SETUP_REQUIRED` until enrolled). Secrets are AES-256-GCM encrypted (`TOTP_KEY`, falls back to `JWT_SECRET`). A code works once per 30 s step. Wrong codes share the password lockout counter, and the password step must NOT reset it. API tests and e2e servers run with `REQUIRE_ADMIN_TOTP=false` except in `test/totp.e2e.ts`.
 - `AuditLog` is append-only, enforced by a PostgreSQL trigger; tests clear it with `TRUNCATE`.
 - The Docker files in `infra/` and `apps/*/Dockerfile` have not been built in the development environment (no Docker daemon there).
+
+## Project office (stage 3)
+
+- Code: `apps/api/src/projects/` (rules in `project-rules.ts`, services for projects, tasks, decisions, workload); UI under `apps/web/app/(app)/{projects,tasks,workload}` and `components/work/`.
+- A project owns a GROUP chat (`Project.chatId`); the team is the chat membership, so team changes go through the project (`PROJECT_CHAT_MANAGED` refuses them in the chat). Visibility: team, manager, curator, ADMIN/MANAGEMENT; everyone else gets 404. Creating projects: ADMIN, MANAGEMENT, PROJECT_MANAGER.
+- Tasks and decisions travel inside `MessageDto` (`tasks`, `decision`) and are refreshed to the chat with the existing `message:updated` event (`MessagesService.broadcastUpdate`). One decision per message. Decision status is derived: any objection → OBJECTIONS; everyone answered → CONFIRMED; else PENDING. Objection needs a comment.
+- Workload counts PLANNED and ACTIVE projects only; above 100% is flagged. Dates are calendar dates (`@db.Date`), "today" is taken in `APP_TIMEZONE`. DTO class fields exist with value `undefined`, so inspect values, not `Object.keys`.
 
 ## Core domain idea
 
