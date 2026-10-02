@@ -141,7 +141,7 @@ export function Workflow({ doc, onChange }: { doc: DocumentDto; onChange: (d: Do
       {(doc.status === 'APPROVED' || doc.status === 'SIGNED' || doc.scan) && (
         <Card aria-label={t('docs.scan')} data-testid="scan-card">
           <h2 className="mb-1 font-medium">{t('docs.scan')}</h2>
-          {doc.status === 'APPROVED' && <p className="mb-2 text-sm text-slate-600">{t('docs.printHint')}</p>}
+          {doc.status === 'APPROVED' && <p className="mb-2 text-sm text-slate-600">{t(doc.pdfEnabled ? 'docs.printHint' : 'docs.printHintWord')}</p>}
           {doc.status === 'SIGNED' && <p className="mb-2 text-sm text-slate-600">{t('docs.registerHint')}</p>}
           {doc.scan && (
             <p className="mb-2 text-sm">

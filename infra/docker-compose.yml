@@ -23,8 +23,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      gotenberg:
-        condition: service_started
     environment:
       DATABASE_URL: postgresql://hemcenter:${DB_PASSWORD}@db:5432/hemcenter
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ random characters) in infra/.env}
@@ -37,15 +35,18 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost.invalid}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Almaty}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
-      GOTENBERG_URL: http://gotenberg:3000
+      # Word only by default. For PDF: PDF_ENABLED=true and GOTENBERG_URL=http://gotenberg:3000 in infra/.env, start with --profile pdf
+      PDF_ENABLED: ${PDF_ENABLED:-false}
+      GOTENBERG_URL: ${GOTENBERG_URL:-}
       ORG_NAME_RU: ${ORG_NAME_RU:-Центр гематологии}
       ORG_NAME_KK: ${ORG_NAME_KK:-Гематология орталығы}
     volumes:
       # attachments; back this volume up together with the database
       - files:/data/files
 
-  # Turns Word documents into PDF (LibreOffice inside). Not reachable from outside: only the api talks to it.
+  # Optional: turns Word documents into PDF (LibreOffice inside, about 1 GB of RAM). Only with --profile pdf.
   gotenberg:
+    profiles: ["pdf"]
     image: gotenberg/gotenberg:8
     restart: unless-stopped
 

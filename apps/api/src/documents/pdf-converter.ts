@@ -65,6 +65,9 @@ export class GotenbergConverter extends PdfConverter {
   }
 }
 
+/** PDF is an option: the centre works in Word only unless PDF_ENABLED=true (needs LibreOffice or Gotenberg). */
+export const pdfEnabled = () => process.env.PDF_ENABLED === 'true';
+
 export const pdfConverterFactory = {
   provide: PdfConverter,
   useFactory: (): PdfConverter => (process.env.GOTENBERG_URL ? new GotenbergConverter() : new LibreOfficeConverter()),

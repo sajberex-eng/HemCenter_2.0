@@ -11,6 +11,7 @@ import { DocumentsService } from './documents.service';
 import { AssignmentsService } from '../assignments/assignments.service';
 import type { Assignment } from '@prisma/client';
 import { lockDocument } from './approval.service';
+import { pdfEnabled } from './pdf-converter';
 import { formatRegistrationNumber } from './approval-rules';
 
 const isSecretary = (u: Pick<User, 'roles'>) => u.roles.includes('SECRETARY') || u.roles.includes('ADMIN');
@@ -109,11 +110,11 @@ export class RegistryService {
     await this.documents.dropFiles(result.old);
     await this.assignments.announce(result.created as Assignment[]);
     await this.audit.log({ actorId: actor.id, action: 'document.registered', entityType: 'Document', entityId: id, data: { number: result.number, assignments: result.created.length }, ip });
-    // fix the final PDF (and its hash) right away; if the converter is down, the first download makes it
+    // fix the final file (and its hash) right away; with PDF on, the PDF too; if the converter is down, the first download makes it
     try {
-      await this.documents.render(await this.prisma.document.findUniqueOrThrow({ where: { id }, include: { kind: true } }), true);
+      await this.documents.render(await this.prisma.document.findUniqueOrThrow({ where: { id }, include: { kind: true } }), pdfEnabled());
     } catch (e) {
-      this.log.warn(`final PDF of ${id} not made yet: ${(e as Error).message}`);
+      this.log.warn(`final file of ${id} not made yet: ${(e as Error).message}`);
     }
     await this.notify(id);
     return this.documents.get(id, actor);

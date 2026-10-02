@@ -8,7 +8,7 @@ import { FileStorage } from '../files/file-storage';
 import { sanitizeFileName } from '../files/file-rules';
 import { parseDate, todayIn, dateOnly } from '../projects/project-rules';
 import { KindsTemplatesService } from './kinds-templates.service';
-import { PdfConverter } from './pdf-converter';
+import { PdfConverter, pdfEnabled } from './pdf-converter';
 import { buildContext, renderDocx, TemplateError, type RenderContext } from './render';
 import { isAwaiting } from './approval-rules';
 import type { CreateDocumentDto, UpdateDocumentDto } from './dto';
@@ -29,6 +29,8 @@ export const toDocumentDto = (d: Document, ctx: { viewerId: string; steps: Appro
   registrationNumber: d.registrationNumber,
   registeredAt: d.registeredAt?.toISOString() ?? null,
   pdfSha256: d.pdfSha256,
+  docxSha256: d.docxSha256,
+  pdfEnabled: pdfEnabled(),
   round: d.round,
   steps: ctx.steps
     .slice()
@@ -117,6 +119,7 @@ export class DocumentsService {
     data.docxKey = null;
     data.pdfKey = null;
     data.pdfSha256 = null;
+    data.docxSha256 = null;
     data.renderedAt = null;
     const updated = await this.prisma.document.update({ where: { id }, data });
     await this.removeKeys([d.docxKey, d.pdfKey]);
@@ -126,7 +129,7 @@ export class DocumentsService {
 
   /** The text or the approval sheet changed: the generated files no longer match. */
   async invalidateFiles(tx: Prisma.TransactionClient, doc: Pick<Document, 'id' | 'docxKey' | 'pdfKey'>) {
-    await tx.document.update({ where: { id: doc.id }, data: { docxKey: null, pdfKey: null, pdfSha256: null, renderedAt: null } });
+    await tx.document.update({ where: { id: doc.id }, data: { docxKey: null, pdfKey: null, pdfSha256: null, docxSha256: null, renderedAt: null } });
     return [doc.docxKey, doc.pdfKey];
   }
 
@@ -174,7 +177,7 @@ export class DocumentsService {
       templateId = template.id;
       pdfKey = null;
       pdfSha256 = null;
-      const won = await this.prisma.document.updateMany({ where: { id: doc.id, docxKey: doc.docxKey }, data: { docxKey, templateId, pdfKey: null, pdfSha256: null, renderedAt: new Date() } });
+      const won = await this.prisma.document.updateMany({ where: { id: doc.id, docxKey: doc.docxKey }, data: { docxKey, templateId, pdfKey: null, pdfSha256: null, docxSha256: doc.status === 'REGISTERED' ? createHash('sha256').update(bytes).digest('hex') : null, renderedAt: new Date() } });
       if (won.count === 0) {
         // someone else rendered at the same moment: use their file
         await this.storage.remove(docxKey);
@@ -202,6 +205,7 @@ export class DocumentsService {
 
   /** The file for download, made on first request. */
   async file(id: string, actor: User, format: 'docx' | 'pdf') {
+    if (format === 'pdf' && !pdfEnabled()) throw new NotFoundException('PDF_DISABLED');
     const d = await this.load(id, actor);
     const full = await this.prisma.document.findUniqueOrThrow({ where: { id: d.id }, include: { kind: true } });
     const keys = await this.render(full, format === 'pdf');

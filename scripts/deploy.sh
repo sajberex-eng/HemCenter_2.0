@@ -41,6 +41,8 @@ BACKUP_KEEP_DAYS=30
 BACKUP_HOST_DIR=./backups
 ORG_NAME_RU=Центр гематологии
 ORG_NAME_KK=Гематология орталығы
+PDF_ENABLED=false
+GOTENBERG_URL=
 ENV
   chmod 600 infra/.env
 fi
@@ -57,7 +59,7 @@ echo "== Building and starting (first build takes several minutes)"
 # one image at a time: parallel builds need more memory than a 2 GB server has
 export COMPOSE_PARALLEL_LIMIT=1
 $DC build api web
-$DC up -d db gotenberg api web caddy
+$DC up -d db api web caddy
 
 if ! grep -q '^VAPID_PUBLIC_KEY=.\+' infra/.env; then
   echo "== Generating Web Push keys"

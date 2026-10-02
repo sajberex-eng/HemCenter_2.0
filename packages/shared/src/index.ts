@@ -286,6 +286,10 @@ export interface DocumentDto {
   registrationNumber: string | null;
   registeredAt: string | null;
   pdfSha256: string | null;
+  /** Hash of the final Word file of a registered document. */
+  docxSha256: string | null;
+  /** False when the server works in Word only (no PDF download). */
+  pdfEnabled: boolean;
   round: number;
   steps: ApprovalStepDto[];
   /** The approval sheet; filled when a single document is opened, empty in lists. */

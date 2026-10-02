@@ -577,6 +577,8 @@ model Document {
   docxKey            String?
   pdfKey             String?
   pdfSha256          String?
+  // SHA-256 of the final Word file, fixed when the document is registered (the anchor for a later signature).
+  docxSha256         String?
   renderedAt         DateTime?
   // How many times it was sent for approval; steps are reset on each round and the history stays in ApprovalAction.
   round              Int               @default(0)

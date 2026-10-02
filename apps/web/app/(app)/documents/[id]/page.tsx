@@ -52,7 +52,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     setError(undefined);
     try {
       await saveProtected(`/documents/${id}/file?format=${format}`, `${doc.title}.${format}`);
-      if (format === 'pdf') await load(); // the hash appears once the PDF exists
+      if (format === 'pdf' || doc?.status === 'REGISTERED') await load(); // the hash appears once the file exists
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -151,6 +151,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 <dd className="break-all font-mono text-xs">{doc.pdfSha256}</dd>
               </div>
             )}
+            {doc.docxSha256 && (
+              <div className="sm:col-span-2">
+                <dt className="text-slate-500">{t('docs.shaDocx')}</dt>
+                <dd className="break-all font-mono text-xs">{doc.docxSha256}</dd>
+              </div>
+            )}
           </dl>
         </Card>
       )}
@@ -158,7 +164,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       {!editing && (
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" disabled={busy !== null} onClick={() => download('docx')}>{busy === 'docx' ? t('docs.preparing') : t('docs.downloadDocx')}</Button>
-          <Button variant="secondary" disabled={busy !== null} onClick={() => download('pdf')}>{busy === 'pdf' ? t('docs.preparing') : t('docs.downloadPdf')}</Button>
+          {doc.pdfEnabled && <Button variant="secondary" disabled={busy !== null} onClick={() => download('pdf')}>{busy === 'pdf' ? t('docs.preparing') : t('docs.downloadPdf')}</Button>}
           {canEdit && <Button onClick={() => setEditing(true)}>{t('docs.edit')}</Button>}
         </div>
       )}
