@@ -29,6 +29,8 @@ services:
       TOTP_KEY: ${TOTP_KEY:?set TOTP_KEY in infra/.env}
       NODE_ENV: production
       PORT: 4000
+      # 2FA is mandatory for administrators and management. false = TEST SERVERS ONLY.
+      REQUIRE_ADMIN_TOTP: ${REQUIRE_ADMIN_TOTP:-true}
       FILES_DIR: /data/files
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
