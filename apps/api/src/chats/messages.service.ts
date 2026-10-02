@@ -105,6 +105,14 @@ export class MessagesService {
     return dto;
   }
 
+  /** Re-sends a message to its chat after something attached to it changed (a task, a decision answer). */
+  async broadcastUpdate(messageId: string) {
+    const row = await this.prisma.message.findUnique({ where: { id: messageId }, include: REPLY_INCLUDE });
+    if (!row) return;
+    const members = await this.prisma.chatMember.findMany({ where: { chatId: row.chatId }, select: { userId: true } });
+    this.realtime.emit(members.map((m) => m.userId), 'message:updated', toMessageDto(row));
+  }
+
   private async requireAuthored(chatId: string, messageId: string, userId: string) {
     await this.chats.requireMember(chatId, userId);
     const message = await this.prisma.message.findFirst({ where: { id: messageId, chatId }, include: REPLY_INCLUDE });

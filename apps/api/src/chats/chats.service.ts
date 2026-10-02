@@ -140,6 +140,11 @@ export class ChatsService {
     return this.get(chat.id, userId);
   }
 
+  /** A project chat's members are the project team: they are changed in the project, not in the chat. */
+  private async assertNotProjectChat(chatId: string) {
+    if (await this.prisma.project.count({ where: { chatId } })) throw new BadRequestException('PROJECT_CHAT_MANAGED');
+  }
+
   private requireGroupOwner(chat: { type: string }, me: { role: string }) {
     if (chat.type !== 'GROUP') throw new BadRequestException('NOT_A_GROUP');
     if (me.role !== 'OWNER') throw new ForbiddenException('FORBIDDEN');
@@ -157,6 +162,7 @@ export class ChatsService {
   async addMembers(chatId: string, userId: string, userIds: string[], ip?: string) {
     const { chat, me } = await this.requireMember(chatId, userId);
     this.requireGroupOwner(chat, me);
+    await this.assertNotProjectChat(chatId);
     const existing = new Set(this.memberIds(chat));
     const fresh = [...new Set(userIds)].filter((id) => !existing.has(id));
     if (existing.size + fresh.length > GROUP_MAX_MEMBERS) throw new BadRequestException('GROUP_TOO_LARGE');
@@ -174,6 +180,7 @@ export class ChatsService {
   async removeMember(chatId: string, actorId: string, targetId: string, ip?: string) {
     const { chat, me } = await this.requireMember(chatId, actorId);
     if (chat.type !== 'GROUP') throw new BadRequestException('NOT_A_GROUP');
+    await this.assertNotProjectChat(chatId);
     if (targetId !== actorId && me.role !== 'OWNER') throw new ForbiddenException('FORBIDDEN');
     const target = chat.members.find((m) => m.userId === targetId);
     if (!target) throw new NotFoundException('USER_NOT_FOUND');

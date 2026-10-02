@@ -33,6 +33,25 @@ enum NotifyMode {
   NONE
 }
 
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  DONE
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum DecisionAnswer {
+  AGREE
+  OBJECT
+  ACKNOWLEDGED
+}
+
 enum Locale {
   ru
   kk
@@ -100,6 +119,13 @@ model User {
   chatsCreated       Chat[]
   attachments        Attachment[]
   pinsMade           Pin[]
+  projectMemberships ProjectMember[]
+  tasksAssigned      Task[]             @relation("TaskAssignee")
+  tasksCreated       Task[]             @relation("TaskCreator")
+  decisionsCreated   Decision[]
+  decisionAnswers    DecisionResponse[]
+  projectsLed        Project[]          @relation("ProjectManager")
+  projectsCurated    Project[]          @relation("ProjectCurator")
 }
 
 model Session {
@@ -163,6 +189,9 @@ model Chat {
   messages      Message[]
   attachments   Attachment[]
   pins          Pin[]
+  project       Project?
+  decisions     Decision[]
+  tasks         Task[]
 }
 
 model ChatMember {
@@ -195,6 +224,8 @@ model Message {
   attachments Attachment[]
   pins        Pin[]
   mentionIds  String[]
+  tasks       Task[]
+  decision    Decision?
   createdAt   DateTime     @default(now())
   editedAt    DateTime?
   deletedAt   DateTime?
@@ -272,4 +303,114 @@ model ImportSession {
 
   @@index([createdById])
   @@index([expiresAt])
+}
+
+// ---- Project office (stage 3) ------------------------------------------------------------------------------------
+
+model Project {
+  id         String          @id @default(uuid())
+  name       String
+  goal       String?
+  status     ProjectStatus   @default(PLANNED)
+  startDate  DateTime?       @db.Date
+  endDate    DateTime?       @db.Date
+  managerId  String
+  manager    User            @relation("ProjectManager", fields: [managerId], references: [id])
+  curatorId  String?
+  curator    User?           @relation("ProjectCurator", fields: [curatorId], references: [id])
+  // The project's own group chat; its members follow the team.
+  chatId     String          @unique
+  chat       Chat            @relation(fields: [chatId], references: [id])
+  members    ProjectMember[]
+  milestones Milestone[]
+  tasks      Task[]
+  decisions  Decision[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model ProjectMember {
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  // Share of the person's working time in this project, 0-100. Totals above 100 across active projects are flagged.
+  allocation Int      @default(0)
+  roleTitle  String?
+  joinedAt   DateTime @default(now())
+
+  @@id([projectId, userId])
+  @@index([userId])
+}
+
+model Milestone {
+  id        String    @id @default(uuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  dueDate   DateTime  @db.Date
+  // Overdue is derived: not done and dueDate in the past.
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([projectId])
+}
+
+model Task {
+  id              String     @id @default(uuid())
+  projectId       String?
+  project         Project?   @relation(fields: [projectId], references: [id])
+  title           String
+  description     String?
+  // Exactly one responsible person - required by design (TZ 3.2).
+  assigneeId      String
+  assignee        User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  coAssigneeIds   String[]
+  dueDate         DateTime?  @db.Date
+  status          TaskStatus @default(OPEN)
+  doneAt          DateTime?
+  createdById     String
+  createdBy       User       @relation("TaskCreator", fields: [createdById], references: [id])
+  // The message the task was born from. The link stays if the message is later deleted.
+  sourceChatId    String?
+  sourceChat      Chat?      @relation(fields: [sourceChatId], references: [id])
+  sourceMessageId String?
+  sourceMessage   Message?   @relation(fields: [sourceMessageId], references: [id])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([assigneeId, status])
+  @@index([projectId])
+}
+
+model Decision {
+  id              String             @id @default(uuid())
+  projectId       String?
+  project         Project?           @relation(fields: [projectId], references: [id])
+  text            String
+  addresseeIds    String[]
+  createdById     String
+  createdBy       User               @relation(fields: [createdById], references: [id])
+  sourceChatId    String
+  sourceChat      Chat               @relation(fields: [sourceChatId], references: [id])
+  // One decision per message.
+  sourceMessageId String?            @unique
+  sourceMessage   Message?           @relation(fields: [sourceMessageId], references: [id])
+  responses       DecisionResponse[]
+  createdAt       DateTime           @default(now())
+
+  @@index([sourceChatId])
+}
+
+model DecisionResponse {
+  decisionId String
+  decision   Decision       @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+  answer     DecisionAnswer
+  // Required for OBJECT.
+  comment    String?
+  at         DateTime       @default(now())
+
+  @@id([decisionId, userId])
 }

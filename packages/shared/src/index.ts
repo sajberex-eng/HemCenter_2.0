@@ -46,6 +46,55 @@ export const MAX_PINS_PER_CHAT = 5;
 /** How many messages are loaded on each side of a search hit. */
 export const AROUND_WINDOW = 25;
 
+// ---- Project office --------------------------------------------------------
+
+export const PROJECT_STATUSES = ['PLANNED', 'ACTIVE', 'ON_HOLD', 'DONE'] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'DONE'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export const DECISION_ANSWERS = ['AGREE', 'OBJECT', 'ACKNOWLEDGED'] as const;
+export type DecisionAnswer = (typeof DECISION_ANSWERS)[number];
+/** Projects counted towards a person's workload. */
+export const LOADED_PROJECT_STATUSES: readonly ProjectStatus[] = ['PLANNED', 'ACTIVE'];
+export const WORKLOAD_LIMIT = 100;
+export const TITLE_MAX_LENGTH = 200;
+export const TEXT_MAX_LENGTH = 4000;
+
+/** A task shown under the message it was created from. */
+export interface TaskCardDto {
+  id: string;
+  title: string;
+  assigneeId: string;
+  dueDate: string | null;
+  status: TaskStatus;
+  overdue: boolean;
+}
+
+export interface TaskDto extends TaskCardDto {
+  description: string | null;
+  coAssigneeIds: string[];
+  projectId: string | null;
+  createdById: string;
+  sourceChatId: string | null;
+  sourceMessageId: string | null;
+  createdAt: string;
+}
+
+/** pending: someone has not answered yet; objections: at least one objection; confirmed: everyone answered, none objected. */
+export type DecisionStatus = 'PENDING' | 'OBJECTIONS' | 'CONFIRMED';
+
+export interface DecisionDto {
+  id: string;
+  text: string;
+  createdById: string;
+  addresseeIds: string[];
+  responses: { userId: string; answer: DecisionAnswer; comment: string | null; at: string }[];
+  status: DecisionStatus;
+  projectId: string | null;
+  sourceChatId: string;
+  createdAt: string;
+}
+
 export interface MessageDto {
   id: string;
   chatId: string;
@@ -59,6 +108,8 @@ export interface MessageDto {
   createdAt: string;
   editedAt: string | null;
   deleted: boolean;
+  tasks: TaskCardDto[];
+  decision: DecisionDto | null;
 }
 
 export interface ChatMemberDto {
