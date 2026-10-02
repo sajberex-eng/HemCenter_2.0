@@ -14,6 +14,7 @@ import { MeetingsModule } from './meetings/meetings.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SystemModule } from './system/system.module';
 import { SearchModule } from './search/search.module';
 import { ImportModule } from './import/import.module';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -21,7 +22,7 @@ import { HealthController } from './health.controller';
 
 @Global()
 @Module({
-  imports: [ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }], skipIf: () => process.env.DISABLE_THROTTLE === 'true' }), AuditModule, RealtimeModule, AuthModule, UsersModule, OrgModule, ChatsModule, OversightModule, ProjectsModule, DocumentsModule, MeetingsModule, AssignmentsModule, NotificationsModule, DashboardModule, SearchModule, ImportModule],
+  imports: [ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }], skipIf: () => process.env.DISABLE_THROTTLE === 'true' }), AuditModule, RealtimeModule, AuthModule, UsersModule, OrgModule, ChatsModule, OversightModule, ProjectsModule, DocumentsModule, MeetingsModule, AssignmentsModule, NotificationsModule, DashboardModule, SystemModule, SearchModule, ImportModule],
   controllers: [HealthController],
   providers: [PrismaService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
   exports: [PrismaService],

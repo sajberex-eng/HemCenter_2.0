@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 HemCenter 2.0 is a communication and project-office system for the administrative staff of a private hematology center in **Kazakhstan**. It replaces WhatsApp groups.
 
 - `docs/TZ.md` is the source of truth for requirements (acceptance scenarios are labelled `П-x.x.x`); `docs/research.md` explains the decisions; `docs/roadmap.md` lists the stages.
-- **Stages 1 and 2 are implemented**: login, roles, invitations, org structure, audit log, TOTP 2FA, kk/ru UI, installable PWA; messenger (direct/group chats, replies, mentions, read ticks, unread counters, real-time over Socket.IO, edit/delete with audit trail, pins), attachments on disk, Web Push + in-app notifications, search, WhatsApp import into read-only archive chats. **Stage 3 is implemented**: projects (team with % allocation, milestones, project chat that follows the team), tasks (exactly one responsible person), decisions with confirmation, workload (profile + matrix, >100% flagged). Documents, protocols, orders and execution control (stage 4) are not started.
+- **Stages 1-4 are implemented and tested on test data; stage 5 (pilot preparation) is mostly done.** Messenger (chats, search, pins, attachments, Web Push, WhatsApp import), projects/tasks/decisions/workload, documents (Word templates, approval, scans, registration), meetings/protocols, assignments with reports and reminders, head's dashboard, audit screen with export, system status, encrypted backups with a restore drill, load test. See the sections below and `docs/roadmap.md`. What still needs the centre's IT side is listed in `docs/operations.md` section 8 (real servers in Kazakhstan, Docker build, push on real phones, Kazakh proofreading, legal texts).
 
 - **Open decisions live in `docs/decisions-needed.md`.** Append there whenever something only the owner can decide comes up; do not block on it. Proceed with a documented default and say so.
 
@@ -59,6 +59,13 @@ pnpm workspace (`apps/api`, `apps/web`, `packages/shared`). `@hemcenter/shared` 
 - Where assignments come from: registering a document (`RegistryService.register` → `AssignmentsService.createForDocument` inside the same transaction: every `DocData.items` entry with `responsibleId` and `due`; controller = the meeting's chair for a protocol, else the document's author; idempotent per `(document, item index)`); by hand (ADMIN, MANAGEMENT, PROJECT_MANAGER, SECRETARY); from a chat message (same roles, responsible must be in the chat).
 - Reports carry up to 5 files (`ReportFile` on `FileStorage`, same blocked-extension rules). Due-date change = request with a reason, one pending at a time, decided by the controller.
 - Notifications: `Notification` rows (type + assignment id only, no text of the work) + realtime `notification:new` + generic push (`PushService.notifyEvent`, texts in `PUSH_TEXT`). Reminders (`ReminderScheduler`, hourly; off with `DISABLE_SCHEDULER=true`, tests set it): 3 days, 1 day, the day, then daily when late (the controller also hears of late ones), at most once per kind per day (`ReminderLog`). Head's overview: `GET /assignments/summary` (ADMIN/MANAGEMENT).
+
+## Operations (stage 5)
+
+- `infra/backup/` (`backup.sh`, `restore.sh`, `verify-restore.sh`, `lib.sh`, `test-backup.sh`): gpg-encrypted bundle of `pg_dump` + files + `counts.txt` + checksums; the drill restores into a scratch database and compares every table's row count and the files. Run `infra/backup/test-backup.sh` (needs `DATABASE_URL`, `FILES_DIR`, createdb rights) after touching them. Compose profile `tools` has `backup`/`restore` services; `gotenberg` is a normal service. None of this has been run under Docker here.
+- `apps/api/scripts/loadtest.ts` (50-100 sockets in one group, measures delivery latency; use a test database). `GET /system/status` + `/admin/system` (disk warning below 20 %, alarm below 10 %). `GET /dashboard` (ADMIN/MANAGEMENT).
+- The audit API deliberately never returns the `data` column (it holds previous message texts and other content); the text stays in the database only. Keep it that way.
+- Docs for people: `docs/operations.md` (IT), `docs/user-guide.md` (employees, ru), `docs/pilot-plan.md`.
 
 ## Core domain idea
 

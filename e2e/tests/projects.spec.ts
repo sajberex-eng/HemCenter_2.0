@@ -84,9 +84,10 @@ test.describe('decisions in a project chat (П-3.2.1)', () => {
     const pending = a.page.getByTestId('pending-decisions');
     await expect(pending).toContainText('Утверждаем график');
     await pending.getByTestId('decision-ack').click();
-    await expect(pending.getByTestId('decision-status')).toHaveText('Подтверждено');
+    // answered: it leaves the list of what is waiting (live, when the server's update arrives), and stays gone after a reload
+    await expect(a.page.getByTestId('pending-decisions')).toHaveCount(0);
     await a.page.reload();
-    await expect(a.page.getByTestId('pending-decisions')).toHaveCount(0); // answered: no longer waiting
+    await expect(a.page.getByTestId('pending-decisions')).toHaveCount(0);
     await a.ctx.close();
   });
 });

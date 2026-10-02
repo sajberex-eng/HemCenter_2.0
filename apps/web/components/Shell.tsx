@@ -39,6 +39,7 @@ const NAV: NavItem[] = [
   { href: '/admin/org', label: 'nav.org', admin: true },
   { href: '/admin/import', label: 'nav.import', admin: true },
   { href: '/admin/audit', label: 'nav.audit', admin: true },
+  { href: '/admin/system', label: 'nav.system', admin: true },
   { href: '/oversight', label: 'nav.oversight', management: true },
   { href: '/profile', label: 'nav.profile' },
 ];

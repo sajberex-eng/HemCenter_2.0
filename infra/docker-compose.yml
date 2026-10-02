@@ -23,6 +23,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      gotenberg:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://hemcenter:${DB_PASSWORD}@db:5432/hemcenter
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ random characters) in infra/.env}
@@ -35,9 +37,17 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost.invalid}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Almaty}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+      GOTENBERG_URL: http://gotenberg:3000
+      ORG_NAME_RU: ${ORG_NAME_RU:-Центр гематологии}
+      ORG_NAME_KK: ${ORG_NAME_KK:-Гематология орталығы}
     volumes:
       # attachments; back this volume up together with the database
       - files:/data/files
+
+  # Turns Word documents into PDF (LibreOffice inside). Not reachable from outside: only the api talks to it.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
 
   web:
     build:
@@ -62,6 +72,56 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddydata:/data
       - caddyconfig:/config
+
+  # --- tools, started by hand or by cron (see docs/operations.md) ---------------------------------------------------
+  # docker compose -f infra/docker-compose.yml --env-file infra/.env --profile tools run --rm backup
+  backup:
+    profiles: ["tools"]
+    build:
+      context: ./backup
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hemcenter:${DB_PASSWORD}@db:5432/hemcenter
+      FILES_DIR: /data/files
+      BACKUP_DIR: /backups
+      BACKUP_PASSPHRASE_FILE: /run/secrets/backup_pass
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+    volumes:
+      - files:/data/files:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    secrets:
+      - backup_pass
+    entrypoint: ["/scripts/backup.sh"]
+
+  # docker compose ... --profile tools run --rm restore /backups/hemcenter-YYYYMMDD-HHMMSS.tar.gpg
+  # Add CONFIRM_OVERWRITE=yes (-e CONFIRM_OVERWRITE=yes) to replace a database that already has data.
+  restore:
+    profiles: ["tools"]
+    build:
+      context: ./backup
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hemcenter:${DB_PASSWORD}@db:5432/hemcenter
+      FILES_DIR: /data/files
+      BACKUP_PASSPHRASE_FILE: /run/secrets/backup_pass
+    volumes:
+      - files:/data/files
+      - ${BACKUP_HOST_DIR:-./backups}:/backups:ro
+    secrets:
+      - backup_pass
+    entrypoint: ["/scripts/restore.sh"]
+
+  # docker compose ... --profile tools run --rm --entrypoint /scripts/verify-restore.sh backup /backups/hemcenter-....tar.gpg
+  # (the "restore drill": opens the backup in a scratch database and compares counts; touches nothing of the live system)
+
+secrets:
+  backup_pass:
+    # a file with the backup passphrase, chmod 600, kept OUT of the repository and also written down in the safe
+    file: ./backup.pass
 
 volumes:
   files:

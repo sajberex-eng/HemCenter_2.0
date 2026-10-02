@@ -7,3 +7,8 @@ coverage
 test-results
 playwright-report
 *.tsbuildinfo
+
+# secrets and backups of a real installation
+infra/.env
+infra/backup.pass
+infra/backups/

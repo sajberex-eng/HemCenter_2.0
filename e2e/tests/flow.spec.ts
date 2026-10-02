@@ -83,10 +83,16 @@ test.describe('onboarding an employee', () => {
 
     // admin blocks the account: the employee is thrown out
     await page.reload();
-    await page.getByLabel('Показывать заблокированных').check();
+    // ticking the box reloads the list; wait for it, or the click below may land on a card that is about to be replaced
+    await Promise.all([page.waitForResponse((r) => r.url().includes('includeInactive=true')), page.getByLabel('Показывать заблокированных').check()]);
     const card = page.locator('section', { hasText: fullName });
-    await card.getByRole('button', { name: 'Заблокировать' }).click();
-    await expect(card.getByText('Заблокирован')).toBeVisible();
+    await expect(card).toBeVisible();
+    // the list may still re-render after the response: retry the click until the card shows the blocked state
+    await expect(async () => {
+      const block = card.getByRole('button', { name: 'Заблокировать' });
+      if (await block.count()) await block.click({ timeout: 2000 });
+      await expect(card.getByText('Заблокирован')).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
   });
 });
 
