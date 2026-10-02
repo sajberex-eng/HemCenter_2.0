@@ -29,7 +29,7 @@ export class WorkloadService {
   }
 
   /** Everyone who sits in at least one planned or running project: rows are people, columns are projects. */
-  async matrix(_actor: User) {
+  async matrix(_actor?: User) {
     const rows = await this.rows();
     const people = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.userId))] }, isActive: true }, select: { id: true, fullName: true }, orderBy: { fullName: 'asc' } });
     const projects = new Map<string, { id: string; name: string; status: string }>();

@@ -428,3 +428,19 @@ export interface AssignmentDto {
   /** What the viewer may do right now. */
   can: { start: boolean; report: boolean; review: boolean; requestDue: boolean; decideDue: boolean; remove: boolean };
 }
+
+// ---- Dashboard for the head of the centre ----------------------------------
+
+export interface DashboardDto {
+  generatedAt: string;
+  projects: {
+    byStatus: Record<ProjectStatus, number>;
+    /** Running projects that have milestones past their date. */
+    withOverdueMilestones: { id: string; name: string; overdue: number }[];
+  };
+  assignments: { open: number; overdue: number; inReview: number; doneLast30Days: number; overdueByPerson: { userId: string; fullName: string; count: number }[] };
+  tasks: { overdue: number };
+  decisionsWaiting: { id: string; text: string; chatId: string; waitingFor: number; ageDays: number }[];
+  overloaded: { userId: string; fullName: string; total: number }[];
+  documents: { inReview: number; registeredThisMonth: number };
+}

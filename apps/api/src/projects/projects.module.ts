@@ -6,5 +6,5 @@ import { TasksService } from './tasks.service';
 import { DecisionsService } from './decisions.service';
 import { WorkloadService } from './workload.service';
 
-@Module({ imports: [ChatsModule], controllers: [ProjectsController], providers: [ProjectsService, TasksService, DecisionsService, WorkloadService], exports: [ProjectsService] })
+@Module({ imports: [ChatsModule], controllers: [ProjectsController], providers: [ProjectsService, TasksService, DecisionsService, WorkloadService], exports: [ProjectsService, WorkloadService] })
 export class ProjectsModule {}

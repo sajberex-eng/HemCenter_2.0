@@ -25,6 +25,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: '/', label: 'nav.home' },
+  { href: '/dashboard', label: 'nav.dashboard', management: true },
   { href: '/chats', label: 'nav.chats', badge: 'chats' },
   { href: '/projects', label: 'nav.projects' },
   { href: '/tasks', label: 'nav.tasks' },
@@ -53,7 +54,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const adminOnly = pathname.startsWith('/admin');
-  const managementOnly = pathname.startsWith('/oversight');
+  const managementOnly = pathname.startsWith('/oversight') || pathname.startsWith('/dashboard');
+  const projectRolesOnly = pathname.startsWith('/workload');
   // an open conversation takes the whole phone screen (own header, no bottom bar), like a messenger
   const immersive = /^\/chats\/[^/]+/.test(pathname) && !pathname.startsWith('/chats/new');
   const inChats = pathname.startsWith('/chats');
@@ -61,12 +63,12 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ready && !user) router.replace('/login');
     // The API enforces roles; this just keeps non-admins out of empty admin screens.
-    else if (ready && user && ((adminOnly && !isAdmin) || (managementOnly && !isManagement))) router.replace('/');
+    else if (ready && user && ((adminOnly && !isAdmin) || (managementOnly && !isManagement) || (projectRolesOnly && !canCreateProjects(user)))) router.replace('/');
     // A seeded or reset account must pick its own password before anything else.
     else if (ready && (user?.mustChangePassword || user?.mfaSetupRequired) && pathname !== '/profile') router.replace('/profile');
-  }, [ready, user, adminOnly, managementOnly, isAdmin, isManagement, pathname, router]);
+  }, [ready, user, adminOnly, managementOnly, projectRolesOnly, isAdmin, isManagement, pathname, router]);
 
-  if (!ready || !user || (adminOnly && !isAdmin) || (managementOnly && !isManagement)) return <p className="p-6 text-slate-500">{t('loading')}</p>;
+  if (!ready || !user || (adminOnly && !isAdmin) || (managementOnly && !isManagement) || (projectRolesOnly && !canCreateProjects(user))) return <p className="p-6 text-slate-500">{t('loading')}</p>;
 
   const items = NAV.filter((i) => (!i.admin || isAdmin) && (!i.management || isManagement) && (!i.projectRoles || canCreateProjects(user)));
   const active = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
