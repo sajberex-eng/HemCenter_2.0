@@ -4,6 +4,8 @@ import { createEmployee, EMPLOYEE_PASSWORD, openAs, type Person } from './helper
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Поиск по чатам и сообщениям' });
 const hits = (page: Page) => page.getByTestId('search-hit');
 const bubble = (page: Page, text: string) => page.getByTestId('message').filter({ hasText: text });
+/** One of the numbered filler messages. A substring match would let "номер 13" + the time "02:35" pass for "номер 130". */
+const numbered = (page: Page, n: number) => page.getByTestId('message').filter({ has: page.getByText(`рабочее сообщение номер ${n}`, { exact: true }) });
 
 async function token(request: APIRequestContext, p: Person) {
   return (await (await request.post('/api/auth/login', { data: { login: p.login, password: EMPLOYEE_PASSWORD } })).json()).accessToken as string;
@@ -38,14 +40,14 @@ test.describe('search', () => {
     const target = bubble(b.page, 'Приказ №42');
     await expect(target).toBeVisible();
     await expect(target.locator('div.ring-2')).toBeVisible(); // briefly emphasised
-    await expect(bubble(b.page, 'рабочее сообщение номер 130')).toHaveCount(0); // the end is not loaded
+    await expect(numbered(b.page, 130)).toHaveCount(0); // the end is not loaded
     await expect(b.page.getByRole('button', { name: 'Показать более поздние' })).toBeVisible();
 
     // read further down step by step, then jump to the end
     await b.page.getByRole('button', { name: 'Показать более поздние' }).click();
-    await expect(bubble(b.page, 'рабочее сообщение номер 70')).toHaveCount(1);
+    await expect(numbered(b.page, 70)).toHaveCount(1);
     await b.page.getByRole('button', { name: 'К последним сообщениям' }).click();
-    await expect(bubble(b.page, 'рабочее сообщение номер 130')).toBeVisible();
+    await expect(numbered(b.page, 130)).toBeVisible();
     await expect(b.page.getByRole('button', { name: 'К последним сообщениям' })).toHaveCount(0);
     await b.ctx.close();
   });

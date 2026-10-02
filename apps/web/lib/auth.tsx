@@ -16,6 +16,7 @@ interface AuthState {
   acceptInvite: (token: string, password: string, consent: boolean) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
+  isManagement: boolean;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       isAdmin: !!user?.roles.includes('ADMIN'),
+      isManagement: !!user?.roles.includes('MANAGEMENT'),
       login: async (login, password) => {
         const r = await loginRequest(login, password);
         if ('mfaToken' in r) return { mfaToken: r.mfaToken };

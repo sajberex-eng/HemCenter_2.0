@@ -15,6 +15,7 @@ interface NavItem {
   href: string;
   label: Key;
   admin?: boolean;
+  management?: boolean;
   badge?: boolean;
 }
 
@@ -26,17 +27,19 @@ const NAV: NavItem[] = [
   { href: '/admin/org', label: 'nav.org', admin: true },
   { href: '/admin/import', label: 'nav.import', admin: true },
   { href: '/admin/audit', label: 'nav.audit', admin: true },
+  { href: '/oversight', label: 'nav.oversight', management: true },
   { href: '/profile', label: 'nav.profile' },
 ];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { user, ready, isAdmin, logout } = useAuth();
+  const { user, ready, isAdmin, isManagement, logout } = useAuth();
   const { t } = useI18n();
   const { totalUnread } = useChats();
   const router = useRouter();
   const pathname = usePathname();
 
   const adminOnly = pathname.startsWith('/admin');
+  const managementOnly = pathname.startsWith('/oversight');
   // an open conversation takes the whole phone screen (own header, no bottom bar), like a messenger
   const immersive = /^\/chats\/[^/]+/.test(pathname) && !pathname.startsWith('/chats/new');
   const inChats = pathname.startsWith('/chats');
@@ -44,14 +47,14 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ready && !user) router.replace('/login');
     // The API enforces roles; this just keeps non-admins out of empty admin screens.
-    else if (ready && user && adminOnly && !isAdmin) router.replace('/');
+    else if (ready && user && ((adminOnly && !isAdmin) || (managementOnly && !isManagement))) router.replace('/');
     // A seeded or reset account must pick its own password before anything else.
     else if (ready && (user?.mustChangePassword || user?.mfaSetupRequired) && pathname !== '/profile') router.replace('/profile');
-  }, [ready, user, adminOnly, isAdmin, pathname, router]);
+  }, [ready, user, adminOnly, managementOnly, isAdmin, isManagement, pathname, router]);
 
-  if (!ready || !user || (adminOnly && !isAdmin)) return <p className="p-6 text-slate-500">{t('loading')}</p>;
+  if (!ready || !user || (adminOnly && !isAdmin) || (managementOnly && !isManagement)) return <p className="p-6 text-slate-500">{t('loading')}</p>;
 
-  const items = NAV.filter((i) => !i.admin || isAdmin);
+  const items = NAV.filter((i) => (!i.admin || isAdmin) && (!i.management || isManagement));
   const active = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
 
   return (

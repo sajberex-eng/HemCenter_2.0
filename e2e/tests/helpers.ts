@@ -29,12 +29,12 @@ export interface Person {
 }
 
 /** Creates an active employee through the API (the onboarding UI is covered by flow.spec.ts). */
-export async function createEmployee(request: APIRequestContext, label: string, info: TestInfo): Promise<Person> {
+export async function createEmployee(request: APIRequestContext, label: string, info: TestInfo, roles: string[] = ['EMPLOYEE']): Promise<Person> {
   const stamp = `${info.project.name}${Date.now()}${Math.floor(Math.random() * 1000)}`.toLowerCase();
   const login = `${label}.${stamp}`;
   const fullName = `${label[0].toUpperCase()}${label.slice(1)} Тест${stamp}`;
   const adminToken = (await (await request.post('/api/auth/login', { data: { login: ADMIN.login, password: ADMIN.password } })).json()).accessToken;
-  const created = await request.post('/api/users', { headers: { Authorization: `Bearer ${adminToken}` }, data: { login, fullName, roles: ['EMPLOYEE'] } });
+  const created = await request.post('/api/users', { headers: { Authorization: `Bearer ${adminToken}` }, data: { login, fullName, roles } });
   if (created.status() !== 201) throw new Error(`could not create ${login}: ${created.status()}`);
   const { inviteToken, user } = await created.json();
   const accepted = await request.post('/api/auth/accept-invite', { data: { token: inviteToken, password: EMPLOYEE_PASSWORD, consent: true } });

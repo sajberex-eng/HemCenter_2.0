@@ -2,10 +2,12 @@
 
 import type { AttachmentDto } from '@hemcenter/shared';
 import { useI18n } from '@/lib/i18n';
+import { useAttachmentBase } from '@/lib/attachmentBase';
 import { downloadAttachment, formatSize, useBlobUrl } from '@/lib/useBlobUrl';
 
 function ImageAttachment({ a }: { a: AttachmentDto }) {
-  const { url, failed } = useBlobUrl(a.id);
+  const base = useAttachmentBase();
+  const { url, failed } = useBlobUrl(a.id, true, base);
   if (failed) return <FileCard a={a} />;
   if (!url) return <div role="img" aria-label={a.name} className="h-32 w-48 animate-pulse rounded-lg bg-slate-200" />;
   return (
@@ -18,10 +20,11 @@ function ImageAttachment({ a }: { a: AttachmentDto }) {
 
 function FileCard({ a }: { a: AttachmentDto }) {
   const { t } = useI18n();
+  const base = useAttachmentBase();
   return (
     <button
       type="button"
-      onClick={() => void downloadAttachment(a.id, a.name)}
+      onClick={() => void downloadAttachment(a.id, a.name, base)}
       aria-label={`${t('chats.download')}: ${a.name}`}
       className="flex w-full max-w-xs items-center gap-3 rounded-lg border border-black/10 bg-black/5 px-3 py-2 text-left hover:bg-black/10"
       data-testid="attachment-file"

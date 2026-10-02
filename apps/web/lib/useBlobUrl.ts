@@ -6,36 +6,37 @@ import { apiBlob } from './api';
 // Object URLs are cached per file for the lifetime of the page, so scrolling does not refetch images.
 const cache = new Map<string, Promise<string>>();
 
-export function blobUrl(attachmentId: string): Promise<string> {
-  let p = cache.get(attachmentId);
+export function blobUrl(attachmentId: string, base = '/attachments'): Promise<string> {
+  const key = `${base}/${attachmentId}`;
+  let p = cache.get(key);
   if (!p) {
-    p = apiBlob(`/attachments/${attachmentId}`).then((b) => URL.createObjectURL(b));
+    p = apiBlob(key).then((b) => URL.createObjectURL(b));
     // a failed fetch must not be cached forever
-    p.catch(() => cache.delete(attachmentId));
-    cache.set(attachmentId, p);
+    p.catch(() => cache.delete(key));
+    cache.set(key, p);
   }
   return p;
 }
 
-export function useBlobUrl(attachmentId: string, enabled = true): { url: string | null; failed: boolean } {
+export function useBlobUrl(attachmentId: string, enabled = true, base = '/attachments'): { url: string | null; failed: boolean } {
   const [state, setState] = useState<{ url: string | null; failed: boolean }>({ url: null, failed: false });
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    blobUrl(attachmentId).then(
+    blobUrl(attachmentId, base).then(
       (url) => alive && setState({ url, failed: false }),
       () => alive && setState({ url: null, failed: true }),
     );
     return () => {
       alive = false;
     };
-  }, [attachmentId, enabled]);
+  }, [attachmentId, enabled, base]);
   return state;
 }
 
 /** Saves a protected file under its real name. */
-export async function downloadAttachment(id: string, name: string) {
-  const url = await blobUrl(id);
+export async function downloadAttachment(id: string, name: string, base = '/attachments') {
+  const url = await blobUrl(id, base);
   const a = document.createElement('a');
   a.href = url;
   a.download = name;

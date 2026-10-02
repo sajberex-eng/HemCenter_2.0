@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { NOTIFY_MODES, type ChatDto, type NotifyMode } from '@hemcenter/shared';
 import { api } from '@/lib/api';
@@ -12,7 +12,7 @@ import { Button, ErrorText, Field, Input, Select, useErrorText } from '../ui';
 import { Avatar } from './Avatar';
 
 export function ChatInfo({ chat, title, onClose }: { chat: ChatDto; title: string; onClose: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useAuth();
   const { people, nameOf, upsertChat, reload } = useChats();
   const router = useRouter();
@@ -21,6 +21,7 @@ export function ChatInfo({ chat, title, onClose }: { chat: ChatDto; title: strin
   const [newTitle, setNewTitle] = useState(chat.title ?? '');
   const [adding, setAdding] = useState(false);
   const [toAdd, setToAdd] = useState<string[]>([]);
+  const [views, setViews] = useState<{ count: number; lastAt: string | null }>();
   const meId = user!.id;
   const isGroup = chat.type === 'GROUP';
   const iAmOwner = chat.members.find((m) => m.userId === meId)?.role === 'OWNER';
@@ -29,6 +30,15 @@ export function ChatInfo({ chat, title, onClose }: { chat: ChatDto; title: strin
     () => Object.values(people).filter((p) => p.isActive && !chat.members.some((m) => m.userId === p.id)).sort((a, b) => a.fullName.localeCompare(b.fullName)),
     [people, chat.members],
   );
+
+  // members are told how often management has opened this chat (never by whom)
+  useEffect(() => {
+    let alive = true;
+    api<{ count: number; lastAt: string | null }>(`/chats/${chat.id}/oversight`).then((v) => alive && setViews(v), () => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [chat.id]);
 
   async function run(fn: () => Promise<unknown>) {
     setError(undefined);
@@ -92,6 +102,11 @@ export function ChatInfo({ chat, title, onClose }: { chat: ChatDto; title: strin
         </div>
 
         <ErrorText>{error}</ErrorText>
+
+        <p role="note" data-testid="oversight-note" className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          {t('chats.oversightNote')}{' '}
+          {views && (views.count === 0 ? t('chats.oversightNone') : t('chats.oversightViews', { n: views.count, date: views.lastAt ? new Date(views.lastAt).toLocaleString(locale === 'kk' ? 'kk-KZ' : 'ru-RU') : '' }))}
+        </p>
 
         <Field label={t('chats.notifications')}>
           <Select value={chat.notifyMode} onChange={(e) => setMode(e.target.value as NotifyMode)}>
